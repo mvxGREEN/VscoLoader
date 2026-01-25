@@ -84,6 +84,7 @@
         android:id="@+id/layoutLoading"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:elevation="8dp"
         android:orientation="vertical"
         android:gravity="center"
         android:visibility="gone"
@@ -95,11 +96,13 @@
         <ProgressBar
             android:layout_width="60dp"
             android:layout_height="60dp"
+            android:elevation="8dp"
             android:indeterminateTint="@color/color_accent" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:elevation="8dp"
             android:layout_marginTop="16dp"
             android:text="@string/msg_loading"
             android:textColor="@color/text_primary"

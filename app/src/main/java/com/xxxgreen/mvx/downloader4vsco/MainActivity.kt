@@ -152,6 +152,7 @@ class MainActivity : AppCompatActivity() {
         setupToolbarMenu()
 
         checkPermissions()
+
         setupWebView()
 
         // Register Receiver
@@ -221,13 +222,14 @@ class MainActivity : AppCompatActivity() {
             // 1. Cancel background work
             VscoLoader.cancelBatch(this)
 
+            if (currentState == UIState.DOWNLOADING)
+                Toast.makeText(this, "Download Cancelled", Toast.LENGTH_SHORT).show()
+
             // 2. Clear Input
             binding.etMainInput.setText("")
 
             // 3. Reset UI to Empty State
             updateUI(UIState.EMPTY)
-
-            Toast.makeText(this, "Download Cancelled", Toast.LENGTH_SHORT).show()
         }
 
         // Action Button
@@ -238,6 +240,64 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        updateBackgroundMenuVisibility()
+    }
+
+    private fun updateBackgroundMenuVisibility() {
+        val item = binding.toolbar.menu.findItem(R.id.action_enable_background) ?: return
+        // Show item ONLY if permissions are missing
+        item.isVisible = !hasBackgroundPermissions()
+    }
+
+    private fun hasBackgroundPermissions(): Boolean {
+        // 1. Check Notification Permission (Android 13+)
+        val notificationGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true // Not required below Android 13
+        }
+
+        // 2. Check Battery Optimization (Android 6+)
+        val powerManager = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+        val batteryIgnored = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            powerManager.isIgnoringBatteryOptimizations(packageName)
+        } else {
+            true // Not required below Android 6
+        }
+
+        return notificationGranted && batteryIgnored
+    }
+
+    private fun requestBackgroundPermissions() {
+        // Priority 1: Notifications (Async)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 101)
+                // We return here because we can't show two dialogs at once.
+                // The user will likely click "Enable Background" again if Battery is also missing.
+                return
+            }
+        }
+
+        // Priority 2: Battery Optimizations (Intent)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+            if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
+                try {
+                    @SuppressLint("BatteryLife") // Suppress warning, we have a valid use case
+                    val intent = Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                    intent.data = Uri.parse("package:$packageName")
+                    startActivity(intent)
+                } catch (e: Exception) {
+                    Toast.makeText(this, "Could not open battery settings", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    // 2. UPDATE: setupToolbarMenu to handle the click
     private fun setupToolbarMenu() {
         binding.toolbar.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
@@ -245,13 +305,6 @@ class MainActivity : AppCompatActivity() {
                     showUpgradeDialog()
                     true
                 }
-                /*
-                R.id.action_rate -> {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$packageName"))
-                    startActivity(intent)
-                    true
-                }
-                 */
                 R.id.action_privacy -> {
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://mobileapps.green/privacy-policy"))
                     startActivity(intent)
@@ -260,6 +313,11 @@ class MainActivity : AppCompatActivity() {
                 R.id.action_about -> {
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://mobileapps.green/"))
                     startActivity(intent)
+                    true
+                }
+                // NEW CASE
+                R.id.action_enable_background -> {
+                    requestBackgroundPermissions()
                     true
                 }
                 else -> false
@@ -578,7 +636,7 @@ class MainActivity : AppCompatActivity() {
             UIState.LOADING -> {
                 binding.layoutLoading.fadeIn()
                 binding.previewCard.fadeOut()
-                // binding.bottomControlCard.fadeOut() // Optional: keep hidden or show
+                binding.bottomControlCard.fadeOut() // Optional: keep hidden or show
             }
             UIState.PREVIEW -> {
                 binding.layoutLoading.fadeOut()
@@ -696,6 +754,7 @@ class MainActivity : AppCompatActivity() {
                 billingClient.acknowledgePurchase(acknowledgePurchaseParams) { billingResult ->
                     if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
                         runOnUiThread {
+                            Toast.makeText(this, "Thank you for your support <3", Toast.LENGTH_SHORT).show()
                             saveGoldStatus(true)
                             recreate()
                         }
@@ -788,10 +847,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // check permissions - but dont request
     private fun checkPermissions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 101)
+                //requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 101)
             }
         }
     }

@@ -74,7 +74,7 @@ object VscoLoader {
         DownloadReceiver.reset()
     }
 
-    // --- NEW: CANCEL FUNCTION ---
+    // --- CANCEL DOWNLOAD ---
     fun cancelBatch(context: Context) {
         // 1. Flip the Kill Switch
         // This tells DownloadReceiver to IGNORE any downloads that finish after this point.
