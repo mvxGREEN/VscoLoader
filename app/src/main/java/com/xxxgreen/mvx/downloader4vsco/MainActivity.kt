@@ -47,6 +47,8 @@ class MainActivity : AppCompatActivity() {
 
     private var fetchJob: Job? = null
 
+    private lateinit var requestNotificationLauncher: androidx.activity.result.ActivityResultLauncher<String>
+
     // Logic Variables
     private val VALID_INPUT_REGEX = Pattern.compile("^$|((?:vsco\\.)|(?:vs\\.)?co\\/)", Pattern.CASE_INSENSITIVE)
     private var currentState: UIState = UIState.EMPTY
@@ -138,6 +140,21 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // --- 1. INITIALIZE PERMISSION LAUNCHER ---
+        requestNotificationLauncher = registerForActivityResult(
+            androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+        ) { isGranted: Boolean ->
+            // This block runs immediately after the user clicks Allow/Deny
+            if (isGranted) {
+                Log.d("MainActivity", "Notifications granted")
+            } else {
+                Toast.makeText(this, "Notifications are recommended for background downloads", Toast.LENGTH_SHORT).show()
+            }
+
+            // --- CHAIN REACTION: NOW REQUEST BATTERY ---
+            requestBatteryOptimization()
+        }
+
         // Setup Utilities
         setupListeners()
         VscoLoader.prepareFileDirs()
@@ -149,7 +166,7 @@ class MainActivity : AppCompatActivity() {
         checkSubscriptionAndLoadAds(isGold)
 
         // check permissions
-        checkPermissions()
+        startBackgroundPermissionChain()
 
         // Setup Toolbar
         updateUpgradeIcon(isGold)
@@ -266,6 +283,40 @@ class MainActivity : AppCompatActivity() {
         item.isVisible = !hasBackgroundPermissions()
     }
 
+    private fun startBackgroundPermissionChain() {
+        // STEP 1: Check Notifications (Android 13+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                // Request Notifs -> The 'requestNotificationLauncher' callback will handle Step 2
+                requestNotificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                return
+            }
+        }
+
+        // If we already have notifications (or are on Android < 13), jump straight to Step 2
+        requestBatteryOptimization()
+    }
+
+    @SuppressLint("BatteryLife")
+    private fun requestBatteryOptimization() {
+        // STEP 2: Check Battery Optimization (Android 6+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+            if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
+                try {
+                    Toast.makeText(this, "Please allow 'Unrestricted' battery usage", Toast.LENGTH_LONG).show()
+                    val intent = Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                    intent.data = Uri.parse("package:$packageName")
+                    startActivity(intent)
+                } catch (e: Exception) {
+                    Toast.makeText(this, "Could not open battery settings", Toast.LENGTH_SHORT).show()
+                }
+            } else {
+                Toast.makeText(this, "Background setup complete!", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     private fun hasBackgroundPermissions(): Boolean {
         // 1. Check Notification Permission (Android 13+)
         val notificationGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -332,7 +383,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 // NEW CASE
                 R.id.action_enable_background -> {
-                    requestBackgroundPermissions()
+                    startBackgroundPermissionChain()
                     true
                 }
                 else -> false
@@ -881,15 +932,6 @@ class MainActivity : AppCompatActivity() {
 
                 // 4. Manual Trigger (Only one download starts)
                 handleInput(sharedText)
-            }
-        }
-    }
-
-    // check permissions - but dont request
-    private fun checkPermissions() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                //requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 101)
             }
         }
     }

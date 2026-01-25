@@ -94,8 +94,8 @@
         app:layout_constraintEnd_toEndOf="parent">
 
         <ProgressBar
-            android:layout_width="100dp"
-            android:layout_height="100dp"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
             android:elevation="8dp"
             android:indeterminateTint="@color/color_accent" />
 
@@ -165,8 +165,10 @@
                     <com.xxxgreen.mvx.downloader4vsco.LoadingView
                         android:id="@+id/customLoader"
                         android:elevation="8dp"
-                        android:layout_width="60dp"
-                        android:layout_height="60dp" />
+                        android:layout_width="150dp"
+                        android:layout_height="150dp"
+                        android:background="@color/text_primary"
+                        app:loading_renderer="GhostsEyeLoadingRenderer"/>
 
                     <TextView
                         android:id="@+id/tvOverlayProgress"
