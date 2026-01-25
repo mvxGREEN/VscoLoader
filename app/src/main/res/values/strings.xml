@@ -3,4 +3,9 @@
     <string name="action_pp">Privacy</string>
     <string name="action_rate">Rate</string>
     <string name="action_about">About</string>
+    <string name="main_hint">Paste Link…</string>
+    <string name="msg_loading">Loading…</string>
+    <string name="msg_downloading">Downloading…</string>
+    <string name="cd_ivpreview">thumbnail</string>
+    <string name="clear_button">clear button</string>
 </resources>

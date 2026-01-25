@@ -268,8 +268,6 @@ class MainActivity : AppCompatActivity() {
         binding.webView.settings.javaScriptEnabled = true
         binding.webView.settings.domStorageEnabled = true
         binding.webView.settings.userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-
-        // NEW: Disable Cache to force fresh API calls
         binding.webView.settings.cacheMode = WebSettings.LOAD_NO_CACHE
 
         binding.webView.webViewClient = object : WebViewClient() {
@@ -281,6 +279,13 @@ class MainActivity : AppCompatActivity() {
                     if (username.isNotEmpty() && username != "api") {
                         VscoLoader.mTitle = username
                     }
+
+                    // FIX: Detect if Shortlink resolved to a Single Media page
+                    // If so, stop waiting for Profile API and switch to Scraper logic
+                    if (url.contains("/media/") || url.contains("/video/")) {
+                        Log.d("MainActivity", "Shortlink resolved to Media: $url")
+                        loadMediaData(url)
+                    }
                 }
             }
 
@@ -288,10 +293,11 @@ class MainActivity : AppCompatActivity() {
                 val url = request?.url.toString()
 
                 if (url.contains("medias/profile") || url.contains("medias/videos")) {
+                    Log.d("MainActivity", "Intercepted API: $url")
+
                     val headers = request?.requestHeaders ?: emptyMap()
                     val cookie = CookieManager.getInstance().getCookie(url) ?: ""
 
-                    // 4. ASSIGN TO FETCHJOB
                     fetchJob = CoroutineScope(Dispatchers.IO).launch {
                         try {
                             VscoLoader.processProfile(url, cookie, headers)
@@ -301,19 +307,14 @@ class MainActivity : AppCompatActivity() {
                                     if (VscoLoader.mMediaUrls.isNotEmpty()) {
                                         binding.tvTitle.text = "${VscoLoader.mMediaUrls.size} Items Found"
 
-                                        // Load preview safely
                                         if (isValidContextForGlide(this@MainActivity)) {
                                             Glide.with(this@MainActivity)
                                                 .load(VscoLoader.mMediaUrls[0])
                                                 .centerCrop()
                                                 .into(binding.ivPreview)
                                         }
-
                                         updateUI(UIState.PREVIEW)
                                     } else {
-                                        // If empty, we might just be on a "No Content" page
-                                        // But if we fail silently, the Loading Spinner stays forever.
-                                        // Let's force a failure UI or Toast.
                                         Toast.makeText(this@MainActivity, "No items found in profile", Toast.LENGTH_SHORT).show()
                                         updateUI(UIState.EMPTY)
                                     }
@@ -344,6 +345,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadMediaData(url: String) {
+        // Cancel any previous jobs (important for rapid pasting)
+        fetchJob?.cancel()
+
         updateUI(UIState.LOADING)
 
         fetchJob = CoroutineScope(Dispatchers.IO).launch {
@@ -352,7 +356,7 @@ class MainActivity : AppCompatActivity() {
                     .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
                     .get()
 
-                // ... (Title extraction logic from previous step) ...
+                // Title Extraction
                 val rawTitle = doc.title()
                 var finalTitle = "vsco_media"
                 val parts = rawTitle.split("|")
@@ -365,7 +369,6 @@ class MainActivity : AppCompatActivity() {
                 finalTitle = finalTitle.replace(" ", "_").replace(Regex("[^a-zA-Z0-9_\\-]"), "")
                 if (finalTitle.isEmpty()) finalTitle = "vsco_download"
                 VscoLoader.mTitle = finalTitle
-                // ...
 
                 val html = doc.html()
                 val head = doc.head().html()
@@ -376,7 +379,6 @@ class MainActivity : AppCompatActivity() {
                 VscoLoader.mMediaUrls.clear()
                 VscoLoader.mMediaUrls.addAll(downloadUrls)
 
-                // 3. CHECK isActive BEFORE UPDATING UI
                 if (isActive) {
                     withContext(Dispatchers.Main) {
                         if (VscoLoader.mMediaUrls.isNotEmpty()) {
@@ -388,7 +390,6 @@ class MainActivity : AppCompatActivity() {
                                     .centerCrop()
                                     .into(binding.ivPreview)
                             }
-
                             updateUI(UIState.PREVIEW)
 
                             if (VscoLoader.isShared) {

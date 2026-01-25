@@ -48,7 +48,7 @@
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:background="@null"
-            android:hint="Paste Link…"
+            android:hint="@string/main_hint"
             android:textColor="@color/text_primary"
             android:textColorHint="@color/text_secondary"
             android:inputType="textUri"
@@ -59,6 +59,7 @@
             android:layout_width="40dp"
             android:layout_height="40dp"
             android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/clear_button"
             android:src="@drawable/ic_close"
             android:visibility="gone"
             app:tint="@color/text_secondary"
@@ -100,7 +101,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="Loading…"
+            android:text="@string/msg_loading"
             android:textColor="@color/text_primary"
             android:textSize="16sp" />
     </LinearLayout>
@@ -128,6 +129,7 @@
                 android:id="@+id/ivPreview"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
+                android:contentDescription="@string/cd_ivpreview"
                 android:scaleType="centerCrop" />
 
             <FrameLayout
@@ -159,7 +161,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
-                        android:text="Starting..."
+                        android:text="@string/msg_downloading"
                         android:textColor="@color/text_primary"
                         android:textSize="16sp" />
                 </LinearLayout>

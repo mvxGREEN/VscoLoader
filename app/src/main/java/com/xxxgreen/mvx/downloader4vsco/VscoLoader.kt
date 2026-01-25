@@ -202,49 +202,29 @@ object VscoLoader {
             dlus.add(dlu)
         }
         // 2. Video (M3U8 Stream)
-        // Check for "/video/" in URL or HTML content indicating a video page
         else if (html.contains("/video/") || html.contains("og:video") || url.contains("/video/")) {
-            Log.d(TAG, "Video detected")
+            // ... (keep existing video logic) ...
             var vurl = ""
-
-            // Strategy A: Direct video link (og:video)
             if (html.contains("og:video")) {
                 val ogStart = html.indexOf("og:video")
                 vurl = html.substring(ogStart).substringAfter("content=\"").substringBefore('"')
-            }
-            // Strategy B: Fallback to Page URL (og:url)
-            // This matches the C# logic which used the og:url to fetch the video data
-            else if (html.contains("og:url")) {
+            } else if (html.contains("og:url")) {
                 val ogStart = html.indexOf("og:url")
-                // Extract content="..."
                 vurl = html.substring(ogStart).substringAfter("content=\"").substringBefore('"')
             }
 
-            // If we found a URL (either direct video or the video page itself), fetch it
             if (vurl.isNotEmpty()) {
-                Log.d(TAG, "Fetching video data from: $vurl")
-                // Loading the response from this URL usually reveals the "stream.mux.com" link
                 val vhtml = loadResponse(vurl)
-
                 if (vhtml.contains("stream.mux.com")) {
                     val streamStart = vhtml.indexOf("stream.mux.com")
-                    // Backtrack to find "https://"
-                    // The mux url usually looks like: "https://stream.mux.com/..."
-                    // We substring from the hit and rely on C# logic which prepended https manually
                     var dlu = "https://" + vhtml.substring(streamStart).substringBefore('"')
-
-                    // Decode Unicode slashes if present (common in JSON responses)
                     dlu = dlu.replace("\\u002F", "/")
-
                     mM3uUrl = dlu
                     dlus.add(dlu)
-                    Log.d(TAG, "Found M3U8: $dlu")
-                } else {
-                    Log.d(TAG, "No stream.mux.com found in response")
                 }
             }
         }
-        // 3. Standard Image
+        // 3. Standard Image (Strategy A: Raw URL Scan)
         else if (html.contains(BASE_IMAGE_URL)) {
             val s = html.lastIndexOf(BASE_IMAGE_URL)
             if (s != -1) {
@@ -256,6 +236,17 @@ object VscoLoader {
                 }
             }
         }
+        // 4. Standard Image (Strategy B: Fallback to og:image)
+        else if (html.contains("og:image")) {
+            Log.d(TAG, "Using og:image fallback")
+            val start = html.indexOf("og:image")
+            var dlu = html.substring(start).substringAfter("content=\"").substringBefore('"')
+            if (dlu.isNotEmpty()) {
+                if (dlu.contains("?")) dlu = dlu.substringBefore("?")
+                dlus.add(dlu)
+            }
+        }
+
         return dlus
     }
 
