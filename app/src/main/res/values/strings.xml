@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">VscLoader</string>
+    <string name="app_name">VsLoader</string>
     <string name="action_pp">Privacy</string>
     <string name="action_rate">Rate</string>
     <string name="action_about">About</string>

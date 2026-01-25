@@ -496,7 +496,11 @@ class MainActivity : AppCompatActivity() {
     private fun setupBilling() {
         billingClient = BillingClient.newBuilder(this)
             .setListener(purchasesUpdatedListener)
-            .enablePendingPurchases()
+            .enablePendingPurchases(
+                PendingPurchasesParams.newBuilder()
+                    .enableOneTimeProducts()
+                    .build()
+            )
             .build()
         startBillingConnection()
     }
@@ -522,9 +526,11 @@ class MainActivity : AppCompatActivity() {
         )
         billingClient.queryProductDetailsAsync(
             QueryProductDetailsParams.newBuilder().setProductList(productList).build()
-        ) { billingResult, productDetailsList ->
-            if (billingResult.responseCode == BillingClient.BillingResponseCode.OK && productDetailsList.isNotEmpty()) {
-                productDetails = productDetailsList[0]
+        ) { billingResult, detailsResult ->
+            if (billingResult.responseCode == BillingClient.BillingResponseCode.OK
+                && detailsResult.productDetailsList.isNotEmpty()
+            ) {
+                productDetails = detailsResult.productDetailsList[0]
             }
         }
     }

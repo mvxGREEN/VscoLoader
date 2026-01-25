@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "VscLoader"
+rootProject.name = "VsLoader"
 include(":app")

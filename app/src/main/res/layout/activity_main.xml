@@ -22,7 +22,7 @@
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
-            app:title="VscoLoader"
+            app:title="VscLoader"
             app:titleTextColor="@color/text_primary"
             app:menu="@menu/main"
             app:titleCentered="false" />

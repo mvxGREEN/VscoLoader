@@ -25,9 +25,11 @@
         android:title="About"
         app:showAsAction="never" />
 
+    <!--
     <item
         android:id="@+id/action_help"
         android:title="Help"
         app:showAsAction="never" />
+        -->
 
 </menu>
