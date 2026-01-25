@@ -61,5 +61,4 @@ dependencies {
     implementation(libs.okhttp)
 
     implementation(libs.glide)
-    //kapt("com.github.bumptech.glide:compiler:4.16.0")
 }

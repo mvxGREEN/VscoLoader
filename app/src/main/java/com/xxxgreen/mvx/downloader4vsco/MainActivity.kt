@@ -151,8 +151,10 @@ class MainActivity : AppCompatActivity() {
         updateUpgradeIcon(isGold)
         setupToolbarMenu()
 
+        // check permissions
         checkPermissions()
 
+        // Setup Webview
         setupWebView()
 
         // Register Receiver
@@ -504,7 +506,9 @@ class MainActivity : AppCompatActivity() {
                                     if (count > 0 && isValidContextForGlide(this@MainActivity)) {
                                         Glide.with(this@MainActivity)
                                             .load(VscoLoader.mMediaUrls[0])
-                                            .centerCrop()
+                                            // force it to load a large image
+                                            .override(1000, 1000)
+                                            .fitCenter()
                                             .into(binding.ivPreview)
                                     }
                                 }
