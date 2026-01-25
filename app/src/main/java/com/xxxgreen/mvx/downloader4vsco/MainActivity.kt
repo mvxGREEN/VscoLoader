@@ -1,6 +1,7 @@
 package com.xxxgreen.mvx.downloader4vsco
 
 import android.Manifest
+import android.app.Activity
 import android.app.AlertDialog
 import android.content.*
 import android.content.pm.PackageManager
@@ -29,11 +30,15 @@ import java.util.regex.Pattern
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebViewClient
+import android.widget.ProgressBar
+import android.widget.TextView
 
 class MainActivity : AppCompatActivity() {
 
     // 1. Declare Binding Object
     private lateinit var binding: ActivityMainBinding
+
+    private var fetchJob: Job? = null
 
     // Logic Variables
     private val VALID_INPUT_REGEX = Pattern.compile("^$|((?:vsco\\.)|(?:vs\\.)?co\\/)", Pattern.CASE_INSENSITIVE)
@@ -46,6 +51,26 @@ class MainActivity : AppCompatActivity() {
 
     enum class UIState {
         EMPTY, LOADING, PREVIEW, DOWNLOADING, FINISHED
+    }
+
+    private val progressReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val completed = intent?.getIntExtra("completed", 0) ?: 0
+            val total = intent?.getIntExtra("total", 0) ?: 0
+
+            if (total > 0) {
+                // Update Overlay UI
+                val progressBar = findViewById<ProgressBar>(R.id.pbOverlay)
+                // (Note: Ensure your XML ID matches, see step 5)
+
+                progressBar.isIndeterminate = false
+                progressBar.max = total
+                progressBar.progress = completed
+
+                val tvProgress = findViewById<TextView>(R.id.tvOverlayProgress)
+                tvProgress.text = "$completed / $total"
+            }
+        }
     }
 
     private val finishReceiver = object : BroadcastReceiver() {
@@ -83,6 +108,9 @@ class MainActivity : AppCompatActivity() {
         // Register Receiver
         val filter = IntentFilter("DOWNLOAD_FINISHED_ACTION")
         ContextCompat.registerReceiver(this, finishReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+
+        val progressFilter = IntentFilter(DownloadService.PROGRESS_UPDATE_ACTION)
+        ContextCompat.registerReceiver(this, progressReceiver, progressFilter, ContextCompat.RECEIVER_NOT_EXPORTED)
 
         // Initial State
         updateUI(UIState.EMPTY)
@@ -190,6 +218,9 @@ class MainActivity : AppCompatActivity() {
     // --- LOGIC & UI UPDATES ---
 
     private fun handleInput(rawInput: String) {
+        // 1. CANCEL ANY RUNNING FETCH (Profile OR Single Post)
+        fetchJob?.cancel()
+
         var input = rawInput.trim()
         if (input.contains("http://")) input = input.replace("http://", "https://")
         if (input.endsWith("/")) input = input.substring(0, input.length - 1)
@@ -201,41 +232,27 @@ class MainActivity : AppCompatActivity() {
         else if (input.contains("vsco.co")) url += input.substring(input.indexOf("vsco.co"))
         else url = input
 
+        // Note: This resets the list. If a download is currently RUNNING,
+        // this will stop it from downloading further items.
         VscoLoader.resetVars()
 
-        // 1. Collection
         if (url.contains("/collection")) {
             VscoLoader.isCollection = true
-
-            // Extract Username immediately
             val username = VscoLoader.extractUsernameFromUrl(url)
             if (username.isNotEmpty()) VscoLoader.mTitle = username
-
             url += "/1"
             loadInWebView(url)
         }
-        // 2. Profile
         else if (!url.contains("/media") && !url.contains("/video") && !url.contains("vs.co")) {
             VscoLoader.isProfile = true
-
-            // Extract Username immediately
             val username = VscoLoader.extractUsernameFromUrl(url)
             if (username.isNotEmpty()) VscoLoader.mTitle = username
-            Log.d("MainActivity", "Username: $username")
-
-
             url += "/gallery"
             loadInWebView(url)
         }
-        // 3. Shortlink (vs.co) - Treat as profile initially?
-        // Note: vs.co links usually redirect to profiles.
-        // We let the WebView resolve it, then capture the title in onPageFinished.
         else if (input.contains("vs.co")) {
-            // We don't know if it's a profile or media yet.
-            // Default logic: Load in WebView to resolve.
             loadInWebView(url)
         }
-        // 4. Single Media (Photo/Video)
         else {
             loadMediaData(url)
         }
@@ -252,16 +269,16 @@ class MainActivity : AppCompatActivity() {
         binding.webView.settings.domStorageEnabled = true
         binding.webView.settings.userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
+        // NEW: Disable Cache to force fresh API calls
+        binding.webView.settings.cacheMode = WebSettings.LOAD_NO_CACHE
+
         binding.webView.webViewClient = object : WebViewClient() {
 
-            // NEW: Catch resolved URLs (e.g. after vs.co redirects)
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 if (url != null) {
                     val username = VscoLoader.extractUsernameFromUrl(url)
-                    // Ensure we don't accidentally set "api" or empty strings
                     if (username.isNotEmpty() && username != "api") {
-                        Log.d("MainActivity", "Username resolved from PageFinished: $username")
                         VscoLoader.mTitle = username
                     }
                 }
@@ -271,25 +288,43 @@ class MainActivity : AppCompatActivity() {
                 val url = request?.url.toString()
 
                 if (url.contains("medias/profile") || url.contains("medias/videos")) {
-                    Log.d("MainActivity", "Intercepted API: $url")
-
                     val headers = request?.requestHeaders ?: emptyMap()
                     val cookie = CookieManager.getInstance().getCookie(url) ?: ""
 
-                    CoroutineScope(Dispatchers.IO).launch {
-                        VscoLoader.processProfile(url, cookie, headers)
+                    // 4. ASSIGN TO FETCHJOB
+                    fetchJob = CoroutineScope(Dispatchers.IO).launch {
+                        try {
+                            VscoLoader.processProfile(url, cookie, headers)
 
-                        withContext(Dispatchers.Main) {
-                            if (VscoLoader.mMediaUrls.isNotEmpty()) {
-                                binding.tvTitle.text = "${VscoLoader.mMediaUrls.size} Items Found"
-                                Glide.with(this@MainActivity)
-                                    .load(VscoLoader.mMediaUrls[0])
-                                    .centerCrop()
-                                    .into(binding.ivPreview)
+                            if (isActive) {
+                                withContext(Dispatchers.Main) {
+                                    if (VscoLoader.mMediaUrls.isNotEmpty()) {
+                                        binding.tvTitle.text = "${VscoLoader.mMediaUrls.size} Items Found"
 
-                                updateUI(UIState.PREVIEW)
-                            } else {
-                                // ... error handling ...
+                                        // Load preview safely
+                                        if (isValidContextForGlide(this@MainActivity)) {
+                                            Glide.with(this@MainActivity)
+                                                .load(VscoLoader.mMediaUrls[0])
+                                                .centerCrop()
+                                                .into(binding.ivPreview)
+                                        }
+
+                                        updateUI(UIState.PREVIEW)
+                                    } else {
+                                        // If empty, we might just be on a "No Content" page
+                                        // But if we fail silently, the Loading Spinner stays forever.
+                                        // Let's force a failure UI or Toast.
+                                        Toast.makeText(this@MainActivity, "No items found in profile", Toast.LENGTH_SHORT).show()
+                                        updateUI(UIState.EMPTY)
+                                    }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.e("MainActivity", "Profile fetch failed", e)
+                            if (isActive) {
+                                withContext(Dispatchers.Main) {
+                                    updateUI(UIState.EMPTY)
+                                }
                             }
                         }
                     }
@@ -299,45 +334,41 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // Helper to prevent Glide crashes if activity is destroyed
+    private fun isValidContextForGlide(context: Context?): Boolean {
+        if (context == null) return false
+        if (context is Activity) {
+            return !context.isDestroyed && !context.isFinishing
+        }
+        return true
+    }
+
     private fun loadMediaData(url: String) {
         updateUI(UIState.LOADING)
 
-        CoroutineScope(Dispatchers.IO).launch {
+        fetchJob = CoroutineScope(Dispatchers.IO).launch {
             try {
                 val doc = Jsoup.connect(url)
                     .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
                     .get()
 
-                val html = doc.html()
-                val head = doc.head().html()
-
-                // Format usually: "Caption | Username | VSCO" or "Username | VSCO"
+                // ... (Title extraction logic from previous step) ...
                 val rawTitle = doc.title()
                 var finalTitle = "vsco_media"
-
                 val parts = rawTitle.split("|")
                 if (parts.size >= 2) {
-                    // If 3 parts: "Caption | Username | VSCO" -> take middle (index 1)
-                    // If 2 parts: "Username | VSCO" -> take first (index 0)
-                    // If 2 parts: "Caption | VSCO" (rare) -> take first
-
-                    if (parts.size >= 3) {
-                        finalTitle = parts[parts.size - 2].trim() // Second to last item
-                    } else {
-                        finalTitle = parts[0].trim()
-                    }
+                    if (parts.size >= 3) finalTitle = parts[parts.size - 2].trim()
+                    else finalTitle = parts[0].trim()
                 } else {
-                    // Fallback to meta tag if title parsing fails
-                    // <meta property="og:title" content="Caption (by Username)">
                     finalTitle = rawTitle.trim()
                 }
-
-                // Cleanup: Remove spaces and special chars for filenames
                 finalTitle = finalTitle.replace(" ", "_").replace(Regex("[^a-zA-Z0-9_\\-]"), "")
-
                 if (finalTitle.isEmpty()) finalTitle = "vsco_download"
-
                 VscoLoader.mTitle = finalTitle
+                // ...
+
+                val html = doc.html()
+                val head = doc.head().html()
 
                 val thumbUrl = VscoLoader.extractThumbnail(url, head + html)
                 val downloadUrls = VscoLoader.extractDownloadUrls(url, head + html)
@@ -345,26 +376,36 @@ class MainActivity : AppCompatActivity() {
                 VscoLoader.mMediaUrls.clear()
                 VscoLoader.mMediaUrls.addAll(downloadUrls)
 
-                withContext(Dispatchers.Main) {
-                    if (VscoLoader.mMediaUrls.isNotEmpty()) {
-                        binding.tvTitle.text = VscoLoader.mTitle
-                        Glide.with(this@MainActivity).load(thumbUrl).centerCrop().into(binding.ivPreview)
+                // 3. CHECK isActive BEFORE UPDATING UI
+                if (isActive) {
+                    withContext(Dispatchers.Main) {
+                        if (VscoLoader.mMediaUrls.isNotEmpty()) {
+                            binding.tvTitle.text = VscoLoader.mTitle
 
-                        updateUI(UIState.PREVIEW)
+                            if (isValidContextForGlide(this@MainActivity)) {
+                                Glide.with(this@MainActivity)
+                                    .load(thumbUrl)
+                                    .centerCrop()
+                                    .into(binding.ivPreview)
+                            }
 
-                        if (VscoLoader.isShared) {
-                            startDownloadService()
+                            updateUI(UIState.PREVIEW)
+
+                            if (VscoLoader.isShared) {
+                                startDownloadService()
+                            }
+                        } else {
+                            Toast.makeText(this@MainActivity, "No media found", Toast.LENGTH_SHORT).show()
+                            updateUI(UIState.EMPTY)
                         }
-                    } else {
-                        Toast.makeText(this@MainActivity, "No media found", Toast.LENGTH_SHORT).show()
-                        updateUI(UIState.EMPTY)
                     }
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(this@MainActivity, "Load failed", Toast.LENGTH_SHORT).show()
-                    updateUI(UIState.EMPTY)
+                if (isActive) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@MainActivity, "Load Failed", Toast.LENGTH_SHORT).show()
+                        updateUI(UIState.EMPTY)
+                    }
                 }
             }
         }
@@ -582,5 +623,6 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         unregisterReceiver(finishReceiver)
+        unregisterReceiver(progressReceiver)
     }
 }

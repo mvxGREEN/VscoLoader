@@ -38,6 +38,9 @@ object VscoLoader {
     var mCountChunks = 0
     var mCountChunksFinal = 0
 
+    var totalItems = 0
+    var completedItems = 0
+
     val absPathDocs: String
         get() = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS).absolutePath + "/"
 
@@ -57,6 +60,10 @@ object VscoLoader {
         isCollection = false
         mM3uUrl = ""
         DownloadReceiver.reset()
+
+        // Reset counters
+        totalItems = 0
+        completedItems = 0
     }
 
     // --- DOWNLOADER FUNCTIONS ---

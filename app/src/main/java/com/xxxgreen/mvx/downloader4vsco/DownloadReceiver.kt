@@ -126,27 +126,42 @@ class DownloadReceiver : BroadcastReceiver() {
         Log.d(TAG, "Standard media file downloaded.")
 
         CoroutineScope(Dispatchers.IO).launch {
-            // 1. Scan the file so it appears in Gallery immediately
-            // Note: For standard downloads, DownloadManager usually handles scanning,
-            // but we do it manually to be safe or if we renamed it.
+            // 1. Scan File
             val filePath = VscoLoader.absPathDocs + VscoLoader.mTitle +
                     (if (VscoLoader.mThumbnailFilename.contains("jpg")) ".jpg" else ".mp4")
             scanMediaFile(context, filePath)
 
-            // 2. Check if there are more items to download (Gallery/Collection support)
+            // 2. Increment Progress
+            VscoLoader.completedItems++
+
+            // 3. Send Update Broadcast (To Service and Activity)
+            val updateIntent = Intent(DownloadService.PROGRESS_UPDATE_ACTION)
+            updateIntent.putExtra("completed", VscoLoader.completedItems)
+            updateIntent.putExtra("total", VscoLoader.totalItems)
+            updateIntent.setPackage(context.packageName)
+            context.sendBroadcast(updateIntent)
+
+            // 4. Check Queue
             if (VscoLoader.mMediaUrls.isNotEmpty()) {
-                Log.d(TAG, "Downloading next item in queue...")
+                Log.d(TAG, "Downloading next item...")
                 val nextUrl = VscoLoader.mMediaUrls.removeAt(0)
 
                 withContext(Dispatchers.Main) {
                     VscoLoader.downloadFile(context, nextUrl)
                 }
             } else {
-                // 3. Queue empty? All done.
-                Log.d(TAG, "Queue empty. Sending FINISHED broadcast.")
+                // 5. Finished
+                Log.d(TAG, "Queue empty. All done.")
                 withContext(Dispatchers.Main) {
+                    // Notify Service to stop
+                    val stopServiceIntent = Intent(DownloadService.PROGRESS_UPDATE_ACTION)
+                    stopServiceIntent.putExtra("finished", true)
+                    stopServiceIntent.setPackage(context.packageName)
+                    context.sendBroadcast(stopServiceIntent)
+
+                    // Notify Activity to show "Finished" state
                     val finishIntent = Intent("DOWNLOAD_FINISHED_ACTION")
-                    finishIntent.setPackage(context.packageName) // Security fix
+                    finishIntent.setPackage(context.packageName)
                     context.sendBroadcast(finishIntent)
                 }
             }
