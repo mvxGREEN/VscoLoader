@@ -48,7 +48,7 @@
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:background="@null"
-            android:hint="Paste Link..."
+            android:hint="Paste Link…"
             android:textColor="@color/text_primary"
             android:textColorHint="@color/text_secondary"
             android:inputType="textUri"
@@ -100,7 +100,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="Loading..."
+            android:text="Loading…"
             android:textColor="@color/text_primary"
             android:textSize="16sp" />
     </LinearLayout>
@@ -154,7 +154,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
-                        android:text="Finishing..."
+                        android:text="Downloading…"
                         android:textColor="@color/text_primary"
                         android:textSize="16sp" />
                 </LinearLayout>

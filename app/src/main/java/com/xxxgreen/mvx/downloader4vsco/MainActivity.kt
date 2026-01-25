@@ -26,6 +26,9 @@ import com.xxxgreen.mvx.downloader4vsco.databinding.DialogUpgradeBinding
 import kotlinx.coroutines.*
 import org.jsoup.Jsoup
 import java.util.regex.Pattern
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.WebViewClient
 
 class MainActivity : AppCompatActivity() {
 
@@ -200,15 +203,40 @@ class MainActivity : AppCompatActivity() {
 
         VscoLoader.resetVars()
 
+        // 1. Collection
         if (url.contains("/collection")) {
             VscoLoader.isCollection = true
+
+            // Extract Username immediately
+            val username = VscoLoader.extractUsernameFromUrl(url)
+            if (username.isNotEmpty()) VscoLoader.mTitle = username
+
             url += "/1"
             loadInWebView(url)
-        } else if (!url.contains("/media") && !url.contains("/video") && !url.contains("vs.co")) {
+        }
+        // 2. Profile
+        else if (!url.contains("/media") && !url.contains("/video") && !url.contains("vs.co")) {
             VscoLoader.isProfile = true
+
+            // Extract Username immediately
+            val username = VscoLoader.extractUsernameFromUrl(url)
+            if (username.isNotEmpty()) VscoLoader.mTitle = username
+            Log.d("MainActivity", "Username: $username")
+
+
             url += "/gallery"
             loadInWebView(url)
-        } else {
+        }
+        // 3. Shortlink (vs.co) - Treat as profile initially?
+        // Note: vs.co links usually redirect to profiles.
+        // We let the WebView resolve it, then capture the title in onPageFinished.
+        else if (input.contains("vs.co")) {
+            // We don't know if it's a profile or media yet.
+            // Default logic: Load in WebView to resolve.
+            loadInWebView(url)
+        }
+        // 4. Single Media (Photo/Video)
+        else {
             loadMediaData(url)
         }
     }
@@ -216,6 +244,59 @@ class MainActivity : AppCompatActivity() {
     private fun loadInWebView(url: String) {
         updateUI(UIState.LOADING)
         binding.webView.loadUrl(url)
+        // logic continues in setupWebView()
+    }
+
+    private fun setupWebView() {
+        binding.webView.settings.javaScriptEnabled = true
+        binding.webView.settings.domStorageEnabled = true
+        binding.webView.settings.userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+        binding.webView.webViewClient = object : WebViewClient() {
+
+            // NEW: Catch resolved URLs (e.g. after vs.co redirects)
+            override fun onPageFinished(view: WebView?, url: String?) {
+                super.onPageFinished(view, url)
+                if (url != null) {
+                    val username = VscoLoader.extractUsernameFromUrl(url)
+                    // Ensure we don't accidentally set "api" or empty strings
+                    if (username.isNotEmpty() && username != "api") {
+                        Log.d("MainActivity", "Username resolved from PageFinished: $username")
+                        VscoLoader.mTitle = username
+                    }
+                }
+            }
+
+            override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
+                val url = request?.url.toString()
+
+                if (url.contains("medias/profile") || url.contains("medias/videos")) {
+                    Log.d("MainActivity", "Intercepted API: $url")
+
+                    val headers = request?.requestHeaders ?: emptyMap()
+                    val cookie = CookieManager.getInstance().getCookie(url) ?: ""
+
+                    CoroutineScope(Dispatchers.IO).launch {
+                        VscoLoader.processProfile(url, cookie, headers)
+
+                        withContext(Dispatchers.Main) {
+                            if (VscoLoader.mMediaUrls.isNotEmpty()) {
+                                binding.tvTitle.text = "${VscoLoader.mMediaUrls.size} Items Found"
+                                Glide.with(this@MainActivity)
+                                    .load(VscoLoader.mMediaUrls[0])
+                                    .centerCrop()
+                                    .into(binding.ivPreview)
+
+                                updateUI(UIState.PREVIEW)
+                            } else {
+                                // ... error handling ...
+                            }
+                        }
+                    }
+                }
+                return super.shouldInterceptRequest(view, request)
+            }
+        }
     }
 
     private fun loadMediaData(url: String) {
@@ -230,10 +311,33 @@ class MainActivity : AppCompatActivity() {
                 val html = doc.html()
                 val head = doc.head().html()
 
-                var title = doc.title()
-                if (title.contains("|")) title = title.substringBefore("|")
-                title = title.trim().replace(" ", "")
-                VscoLoader.mTitle = title
+                // Format usually: "Caption | Username | VSCO" or "Username | VSCO"
+                val rawTitle = doc.title()
+                var finalTitle = "vsco_media"
+
+                val parts = rawTitle.split("|")
+                if (parts.size >= 2) {
+                    // If 3 parts: "Caption | Username | VSCO" -> take middle (index 1)
+                    // If 2 parts: "Username | VSCO" -> take first (index 0)
+                    // If 2 parts: "Caption | VSCO" (rare) -> take first
+
+                    if (parts.size >= 3) {
+                        finalTitle = parts[parts.size - 2].trim() // Second to last item
+                    } else {
+                        finalTitle = parts[0].trim()
+                    }
+                } else {
+                    // Fallback to meta tag if title parsing fails
+                    // <meta property="og:title" content="Caption (by Username)">
+                    finalTitle = rawTitle.trim()
+                }
+
+                // Cleanup: Remove spaces and special chars for filenames
+                finalTitle = finalTitle.replace(" ", "_").replace(Regex("[^a-zA-Z0-9_\\-]"), "")
+
+                if (finalTitle.isEmpty()) finalTitle = "vsco_download"
+
+                VscoLoader.mTitle = finalTitle
 
                 val thumbUrl = VscoLoader.extractThumbnail(url, head + html)
                 val downloadUrls = VscoLoader.extractDownloadUrls(url, head + html)
@@ -259,7 +363,7 @@ class MainActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 e.printStackTrace()
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(this@MainActivity, "Load Failed", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MainActivity, "Load failed", Toast.LENGTH_SHORT).show()
                     updateUI(UIState.EMPTY)
                 }
             }
@@ -443,22 +547,6 @@ class MainActivity : AppCompatActivity() {
             } else {
                 upgradeItem.icon?.setTintList(null)
                 upgradeItem.isEnabled = true
-            }
-        }
-    }
-
-    // --- OTHER SETUP ---
-
-    private fun setupWebView() {
-        binding.webView.settings.javaScriptEnabled = true
-        binding.webView.settings.userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
-        binding.webView.webViewClient = object : WebViewClient() {
-            override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
-                val url = request?.url.toString()
-                if (url.contains("medias/profile")) {
-                    Log.d("MainActivity", "Intercepted profile request: $url")
-                }
-                return super.shouldInterceptRequest(view, request)
             }
         }
     }

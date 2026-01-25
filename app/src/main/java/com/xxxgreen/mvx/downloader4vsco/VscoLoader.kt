@@ -2,28 +2,29 @@ package com.xxxgreen.mvx.downloader4vsco
 
 import android.app.DownloadManager
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
 import android.os.Environment
 import android.util.Log
+import android.webkit.CookieManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.jsoup.Jsoup
+import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
-import java.util.concurrent.Executors
 
 object VscoLoader {
     private const val TAG = "VscoLoader"
     private const val BASE_IMAGE_URL = "im.vsco.co/"
 
-    // Global variables from your C# file
+    // Global variables
     var mThumbnailFilename = ""
     var mM3uUrl = ""
+    var mM3uFileName = "video_playlist"
+    var mFilePath = ""
 
     // State variables
     var mMediaUrls = mutableListOf<String>()
@@ -32,8 +33,10 @@ object VscoLoader {
     var isShared = false
     var isProfile = false
     var isCollection = false
-    var mM3uFileName = "video_playlist"
-    var mFilePath = ""
+
+    // Receiver State
+    var mCountChunks = 0
+    var mCountChunksFinal = 0
 
     val absPathDocs: String
         get() = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS).absolutePath + "/"
@@ -56,10 +59,17 @@ object VscoLoader {
         DownloadReceiver.reset()
     }
 
+    // --- DOWNLOADER FUNCTIONS ---
+
     fun downloadFile(context: Context, url: String) {
+        // If it's a playlist, route to specific logic
+        if (url.contains(".m3u8") || url.contains("stream.mux.com")) {
+            downloadM3u(context, url)
+            return
+        }
+
         val fileName = if (url.contains(".mp4")) "$mTitle.mp4" else "$mTitle.jpg"
 
-        // Basic Download Manager Request
         val request = DownloadManager.Request(Uri.parse(url))
             .setTitle(fileName)
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
@@ -72,6 +82,7 @@ object VscoLoader {
     }
 
     fun downloadM3u(context: Context, url: String) {
+        mM3uUrl = url // Flag for receiver
         val request = DownloadManager.Request(Uri.parse(url))
             .setTitle("m3u8 download")
             .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOCUMENTS, "$mM3uFileName.m3u8")
@@ -80,78 +91,53 @@ object VscoLoader {
         dm.enqueue(request)
     }
 
-    // State variables for the receiver to track
-    var mCountChunks = 0
-    var mCountChunksFinal = 0
-
-    // HELPER: Download a specific TS chunk
     fun downloadTs(context: Context, url: String, index: Int) {
         val fileName = "s$index.ts"
-        // Log.d(TAG, "DownloadTs url=$url index=$index")
-
         val request = DownloadManager.Request(Uri.parse(url))
             .setTitle("ts download")
-            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_HIDDEN) // Hide chunk downloads
+            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_HIDDEN)
             .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOCUMENTS, "temp/$fileName")
 
         val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         dm.enqueue(request)
     }
 
-    // HELPER: Read the downloaded .m3u8 file and extract lines
+    // --- FILE OPERATIONS ---
+
     fun extractUrlsFromM3u(): MutableList<String> {
         val urls = mutableListOf<String>()
         val file = File(absPathDocs + mM3uFileName + ".m3u8")
-
         try {
             if (file.exists()) {
                 file.forEachLine { line ->
-                    // Standard M3U parsing: skip comments
                     if (!line.startsWith("#") && line.isNotBlank()) {
                         urls.add(line)
                     }
                 }
-                // Delete the playlist file after reading
                 file.delete()
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error parsing m3u", e)
-        }
+        } catch (e: Exception) { Log.e(TAG, "Error parsing m3u", e) }
         return urls
     }
 
-    // HELPER: Combine all .ts files into one .mp4
     fun concatTs(): String {
         Log.d(TAG, "ConcatTs started")
         val destPath = getUniqueFilePath(absPathDocs + mTitle + ".mp4")
-        mFilePath = destPath // Save for scanning later
+        mFilePath = destPath
 
         val tempDir = File(absPathDocsTemp)
-
-        // Ensure we grab files s0.ts, s1.ts, s2.ts in correct integer order
         val chunkFiles = tempDir.listFiles { _, name -> name.endsWith(".ts") }
-            ?.sortedBy {
-                // Extract the number between 's' and '.ts'
-                it.name.substringAfter("s").substringBefore(".ts").toIntOrNull() ?: 0
-            }
+            ?.sortedBy { it.name.substringAfter("s").substringBefore(".ts").toIntOrNull() ?: 0 }
 
-        if (chunkFiles.isNullOrEmpty()) {
-            Log.e(TAG, "No chunks found to concat")
-            return ""
-        }
+        if (chunkFiles.isNullOrEmpty()) return ""
 
         try {
             FileOutputStream(destPath).use { output ->
                 chunkFiles.forEach { file ->
-                    file.inputStream().use { input ->
-                        input.copyTo(output)
-                    }
+                    file.inputStream().use { input -> input.copyTo(output) }
                 }
             }
-            Log.d(TAG, "Concat finished: $destPath")
-        } catch (e: Exception) {
-            Log.e(TAG, "Concat error", e)
-        }
+        } catch (e: Exception) { Log.e(TAG, "Concat error", e) }
         return destPath
     }
 
@@ -171,200 +157,240 @@ object VscoLoader {
         File(absPathDocsTemp).deleteRecursively()
     }
 
-    /**
-     * Ported from C#: ExtractThumbnailUrl
-     * Extracts the thumbnail or poster URL and sets the mThumbnailFilename
-     */
+    // --- EXTRACTION LOGIC (VIDEO / PHOTO) ---
+
     fun extractThumbnail(url: String, html: String): String {
         var tu = ""
-
-        // 1. Check for video thumbnail (mux)
+        // Video/Poster logic
         if (html.contains("https://image.mux.com")) {
-            Log.d(TAG, "found video thumbnail url")
-            val startIndex = html.indexOf("https://image.mux.com/")
-            if (startIndex != -1) {
-                tu = html.substring(startIndex)
-                // Extract until the next quote
-                val quoteIndex = tu.indexOf('"')
-                if (quoteIndex != -1) {
-                    tu = tu.substring(0, quoteIndex)
-                }
+            val start = html.indexOf("https://image.mux.com/")
+            tu = html.substring(start).substringBefore('"')
+        } else if (html.contains("/videos/mux/")) {
+            val start = html.indexOf("https://vsco.co/api/1.0/videos/mux/")
+            if (start != -1) {
+                tu = html.substring(start).substringBefore('"').substringBefore("?") + "?w=1200"
             }
-        }
-        // 2. Check for poster url
-        else if (html.contains("https://vsco.co/api/1.0/videos/mux/")) {
-            Log.d(TAG, "found poster thumbnail url")
-            val startIndex = html.indexOf("https://vsco.co/api/1.0/videos/mux/")
-            if (startIndex != -1) {
-                var pu = html.substring(startIndex)
-                val quoteIndex = pu.indexOf('"')
-                if (quoteIndex != -1) {
-                    pu = pu.substring(0, quoteIndex)
-                }
-
-                // remove width parameter if exists
-                if (pu.contains("?")) {
-                    pu = pu.substringBefore("?")
-                }
-
-                // re-add width parameter
-                tu = "$pu?w=1200"
-            }
-        }
-        // 3. Check for standard image url
-        else if (html.contains(BASE_IMAGE_URL)) {
-            Log.d(TAG, "found normal thumbnail url")
+        } else if (html.contains(BASE_IMAGE_URL)) {
             val s = html.lastIndexOf(BASE_IMAGE_URL)
             if (s != -1) {
                 val endSearch = html.indexOf('"', s)
                 if (endSearch != -1) {
-                    val l = endSearch - s
-                    tu = "https://" + html.substring(s, s + l)
-
-                    if (tu.endsWith("/") || tu.endsWith("\\")) {
-                        tu = tu.substring(0, tu.length - 1)
-                    }
-
-                    // remove size parameters
-                    if (tu.contains("?")) {
-                        tu = tu.substringBefore("?")
-                    }
-
-                    // set thumbnail filename based on extension
+                    tu = "https://" + html.substring(s, endSearch)
+                    if (tu.contains("?")) tu = tu.substringBefore("?")
                     mThumbnailFilename = if (tu.contains(".jpg")) "thumbnail.jpg" else "thumbnail.png"
-                    Log.d(TAG, "MThumbnailFilename=$mThumbnailFilename")
                 }
             }
-        } else {
-            Log.d(TAG, "missing thumbnail and poster url!")
         }
-
         return tu
     }
 
-    /**
-     * Ported from C#: ExtractDownloadUrls
-     * Returns a list of media URLs.
-     * Marked as 'suspend' because the video logic requires a network call.
-     */
     suspend fun extractDownloadUrls(url: String, html: String): List<String> {
         Log.d(TAG, "ExtractDownloadUrl")
         val dlus = mutableListOf<String>()
 
-        // 1. Check for mp4 url
+        // 1. MP4 (Direct)
         if (html.contains("https://img.vsco.co/")) {
-            Log.d(TAG, "found mp4 url!")
-            val startIndex = html.indexOf("https://img.vsco.co/")
-            if (startIndex != -1) {
-                var dlu = html.substring(startIndex)
-                val quoteIndex = dlu.indexOf('"')
-                if (quoteIndex != -1) {
-                    dlu = dlu.substring(0, quoteIndex)
-                    Log.d(TAG, "found MP4 url dlu=$dlu")
-                    dlus.add(dlu)
-                }
-            }
+            val start = html.indexOf("https://img.vsco.co/")
+            val dlu = html.substring(start).substringBefore('"')
+            dlus.add(dlu)
         }
-        // 2. Check for video url
-        else if (html.contains("/video/")) {
-            Log.d(TAG, "found video url!")
+        // 2. Video (M3U8 Stream)
+        // Check for "/video/" in URL or HTML content indicating a video page
+        else if (html.contains("/video/") || html.contains("og:video") || url.contains("/video/")) {
+            Log.d(TAG, "Video detected")
+            var vurl = ""
 
-            // find og:url
-            val ogIndex = html.indexOf("og:url")
-            if (ogIndex != -1) {
-                var vurl = html.substring(ogIndex)
-                val contentIndex = vurl.indexOf("content=")
-                if (contentIndex != -1) {
-                    vurl = vurl.substring(contentIndex + 9) // +9 to skip 'content="'
-                    val quoteIndex = vurl.indexOf('"')
-                    if (quoteIndex != -1) {
-                        vurl = vurl.substring(0, quoteIndex)
+            // Strategy A: Direct video link (og:video)
+            if (html.contains("og:video")) {
+                val ogStart = html.indexOf("og:video")
+                vurl = html.substring(ogStart).substringAfter("content=\"").substringBefore('"')
+            }
+            // Strategy B: Fallback to Page URL (og:url)
+            // This matches the C# logic which used the og:url to fetch the video data
+            else if (html.contains("og:url")) {
+                val ogStart = html.indexOf("og:url")
+                // Extract content="..."
+                vurl = html.substring(ogStart).substringAfter("content=\"").substringBefore('"')
+            }
 
-                        // Load video url response (Network Call)
-                        val vhtml = loadResponse(vurl)
+            // If we found a URL (either direct video or the video page itself), fetch it
+            if (vurl.isNotEmpty()) {
+                Log.d(TAG, "Fetching video data from: $vurl")
+                // Loading the response from this URL usually reveals the "stream.mux.com" link
+                val vhtml = loadResponse(vurl)
 
-                        if (vhtml.contains("stream.mux.com")) {
-                            Log.d(TAG, "found m3u8 url")
-                            val streamIndex = vhtml.indexOf("stream.mux.com")
-                            if (streamIndex != -1) {
-                                // backtrack to find https://
-                                // C# logic: "https://" + vhtml[vhtml.IndexOf("stream.mux.com")..];
-                                // Note: The C# logic assumes the string starts with stream.mux.com,
-                                // but we need to ensure the protocol is attached correctly.
+                if (vhtml.contains("stream.mux.com")) {
+                    val streamStart = vhtml.indexOf("stream.mux.com")
+                    // Backtrack to find "https://"
+                    // The mux url usually looks like: "https://stream.mux.com/..."
+                    // We substring from the hit and rely on C# logic which prepended https manually
+                    var dlu = "https://" + vhtml.substring(streamStart).substringBefore('"')
 
-                                var dlu = "https://" + vhtml.substring(streamIndex)
-                                val endQuote = dlu.indexOf('"')
-                                if (endQuote != -1) {
-                                    dlu = dlu.substring(0, endQuote)
+                    // Decode Unicode slashes if present (common in JSON responses)
+                    dlu = dlu.replace("\\u002F", "/")
 
-                                    // decode m3u8 url (C#: dlu.Replace("\\u002F", "/"))
-                                    dlu = dlu.replace("\\u002F", "/")
-
-                                    mM3uUrl = dlu
-                                    dlus.add(dlu)
-                                }
-                            }
-                        }
-                    }
+                    mM3uUrl = dlu
+                    dlus.add(dlu)
+                    Log.d(TAG, "Found M3U8: $dlu")
+                } else {
+                    Log.d(TAG, "No stream.mux.com found in response")
                 }
             }
         }
         // 3. Standard Image
         else if (html.contains(BASE_IMAGE_URL)) {
-            Log.d(TAG, "found normal url!")
             val s = html.lastIndexOf(BASE_IMAGE_URL)
             if (s != -1) {
                 val endSearch = html.indexOf('"', s)
                 if (endSearch != -1) {
-                    val l = endSearch - s
-                    var dlu = "https://" + html.substring(s, s + l)
-
-                    if (dlu.endsWith("/") || dlu.endsWith("\\")) {
-                        dlu = dlu.substring(0, dlu.length - 1)
-                    }
-
-                    // remove size parameters
-                    if (dlu.contains("?")) {
-                        dlu = dlu.substringBefore("?")
-                    }
-
+                    var dlu = "https://" + html.substring(s, endSearch)
+                    if (dlu.contains("?")) dlu = dlu.substringBefore("?")
                     dlus.add(dlu)
                 }
             }
         }
-
         return dlus
     }
 
-    /**
-     * Ported from C#: LoadResponse
-     * Helper to perform a GET request and return the body as a string.
-     * Runs on IO thread.
-     */
+    // --- PROFILE / COLLECTION API LOGIC ---
+
+    // --- NEW HELPER ---
+    fun extractUsernameFromUrl(url: String): String {
+        return try {
+            if (url.contains("vsco.co/") && !url.contains("/api/")) {
+                val segment = url.substringAfter("vsco.co/")
+                if (segment.contains("/")) {
+                    segment.substringBefore("/")
+                } else {
+                    segment
+                }
+            } else {
+                ""
+            }
+        } catch (e: Exception) {
+            ""
+        }
+    }
+
+    // --- UPDATED PROFILE LOGIC ---
+    suspend fun processProfile(initialUrl: String, cookie: String, headers: Map<String, String>) {
+        Log.d(TAG, "Processing Profile: $initialUrl")
+
+        var nextUrl = initialUrl
+        if (nextUrl.contains("limit=")) {
+            nextUrl = nextUrl.substringBefore("limit=") + "limit=14&cursor="
+        }
+
+        val visitedCursors = mutableSetOf<String>()
+        recursiveFetch(nextUrl, cookie, headers, visitedCursors, 0)
+    }
+
+    private suspend fun recursiveFetch(
+        url: String,
+        cookie: String,
+        headers: Map<String, String>,
+        visitedCursors: MutableSet<String>,
+        consecutiveEmptyPages: Int
+    ) {
+        // SAFETY 1: Hard Limit on recursion depth (optional but good practice)
+        if (visitedCursors.size > 200) {
+            Log.d(TAG, "Hit max page limit. Stopping.")
+            return
+        }
+
+        // SAFETY 2: Stop if we've had 3 pages in a row with NO new items
+        if (consecutiveEmptyPages >= 3) {
+            Log.d(TAG, "No new items found for 3 pages. Stopping.")
+            return
+        }
+
+        Log.d(TAG, "Fetching Profile JSON: $url")
+        val jsonStr = loadResponseWithHeaders(url, cookie, headers)
+
+        try {
+            var itemsAddedThisPage = 0
+
+            // Parse Media items
+            var currentJson = jsonStr
+            while (currentJson.contains("responsive_url")) {
+                val urlStart = currentJson.indexOf("responsive_url") + 16
+                var dlu = currentJson.substring(urlStart).substringAfter('"').substringBefore('"')
+                dlu = "https://$dlu"
+
+                // Only add if UNIQUE
+                if (!mMediaUrls.contains(dlu)) {
+                    mMediaUrls.add(dlu)
+                    itemsAddedThisPage++
+
+                    // Set thumbnail if this is the very first item found
+                    if (mMediaUrls.size == 1) {
+                        mThumbnailFilename = if (dlu.contains(".mp4")) "video" else "image"
+                    }
+                }
+
+                currentJson = currentJson.substring(urlStart + 10)
+            }
+
+            Log.d(TAG, "Items found this page: $itemsAddedThisPage. Total: ${mMediaUrls.size}")
+
+            // Update empty page counter
+            val nextEmptyCount = if (itemsAddedThisPage == 0) consecutiveEmptyPages + 1 else 0
+
+            // Check for next cursor
+            if (jsonStr.contains("next_cursor")) {
+                val cursorStart = jsonStr.indexOf("next_cursor")
+                val cursorVal = jsonStr.substring(cursorStart).substringAfter('"').substringAfter('"').substringBefore('"')
+
+                // SAFETY 3: Stop if cursor is empty, null, or ALREADY VISITED
+                if (cursorVal.isNotEmpty() && cursorVal != "null" && !visitedCursors.contains(cursorVal)) {
+                    visitedCursors.add(cursorVal)
+
+                    val newUrl = url.substringBefore("cursor=") + "cursor=" + cursorVal
+
+                    // Recurse with updated counters
+                    recursiveFetch(newUrl, cookie, headers, visitedCursors, nextEmptyCount)
+                } else {
+                    Log.d(TAG, "Cursor invalid or already visited. Stopping.")
+                }
+            } else {
+                Log.d(TAG, "No next_cursor found. Stopping.")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Profile parse error", e)
+        }
+    }
+
+    // --- NETWORK HELPERS ---
+
     private suspend fun loadResponse(urlString: String): String {
+        return loadResponseWithHeaders(urlString, "", emptyMap())
+    }
+
+    private suspend fun loadResponseWithHeaders(urlString: String, cookie: String, headers: Map<String, String>): String {
         return withContext(Dispatchers.IO) {
             val sb = StringBuilder()
             var connection: HttpURLConnection? = null
             try {
-                Log.d(TAG, "LoadResponse url=$urlString")
                 val url = URL(urlString)
                 connection = url.openConnection() as HttpURLConnection
+
+                // Add Headers needed for API
+                connection.setRequestProperty("Cookie", cookie)
+                headers.forEach { (k, v) ->
+                    if(k != "Cookie") connection.setRequestProperty(k, v)
+                }
+                connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+
                 connection.connect()
-
-                val stream = connection.inputStream
-                val reader = BufferedReader(InputStreamReader(stream))
-
+                val reader = BufferedReader(InputStreamReader(connection.inputStream))
                 var line: String? = reader.readLine()
                 while (line != null) {
-                    sb.append(line).append("\n")
+                    sb.append(line)
                     line = reader.readLine()
                 }
-
                 reader.close()
-                stream.close()
             } catch (e: Exception) {
-                Log.e(TAG, "connection failed or null pointer", e)
-                return@withContext ""
+                Log.e(TAG, "Network error: $urlString", e)
             } finally {
                 connection?.disconnect()
             }
