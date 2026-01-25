@@ -198,6 +198,7 @@ class MainActivity : AppCompatActivity() {
             false // Return false so the standard OnClickListener still fires!
         }
 
+        // Paste button
         binding.btnPaste.setOnClickListener {
             val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             val clip = clipboard.primaryClip
@@ -217,19 +218,20 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Clear Button
+        // Clear Button (UPDATED)
         binding.btnClear.setOnClickListener {
-            // 1. Cancel background work
-            VscoLoader.cancelBatch(this)
-
-            if (currentState == UIState.DOWNLOADING)
-                Toast.makeText(this, "Download Cancelled", Toast.LENGTH_SHORT).show()
+            // 1. STOP EVERYTHING
+            fetchJob?.cancel()          // Stops the scraping/loading (Coroutines)
+            VscoLoader.cancelBatch(this) // Stops the downloading (Service/Receiver)
+            inputHandler.removeCallbacks(inputRunnable) // Stops pending debounce
 
             // 2. Clear Input
             binding.etMainInput.setText("")
 
-            // 3. Reset UI to Empty State
+            // 3. Reset UI
             updateUI(UIState.EMPTY)
+
+            Toast.makeText(this, "Cancelled", Toast.LENGTH_SHORT).show()
         }
 
         // Action Button
@@ -632,11 +634,18 @@ class MainActivity : AppCompatActivity() {
                 binding.layoutLoading.fadeOut()
                 binding.previewCard.fadeOut()
                 binding.bottomControlCard.fadeOut()
+                binding.overlayDownloading.visibility = View.GONE
             }
             UIState.LOADING -> {
                 binding.layoutLoading.fadeIn()
                 binding.previewCard.fadeOut()
-                binding.bottomControlCard.fadeOut() // Optional: keep hidden or show
+                binding.bottomControlCard.fadeOut()
+                binding.overlayDownloading.visibility = View.GONE
+
+                // Disable inputs while scraping/fetching data
+                binding.etMainInput.isEnabled = false
+                binding.btnPaste.isEnabled = false
+                binding.btnPaste.alpha = 0.3f
             }
             UIState.PREVIEW -> {
                 binding.layoutLoading.fadeOut()
@@ -655,13 +664,10 @@ class MainActivity : AppCompatActivity() {
                 binding.overlayDownloading.fadeIn()
                 binding.btnAction.fadeOut(targetVisibility = View.INVISIBLE)
 
-                // --- NEW: LOCK INPUTS ---
-                // We disable the text box and paste button so the user can't interfere.
-                // The Clear button (btnClear) remains enabled so they can Cancel.
+                // --- disable inputs during download
                 binding.etMainInput.isEnabled = false
-
                 binding.btnPaste.isEnabled = false
-                binding.btnPaste.alpha = 0.3f // Dim it so it looks disabled
+                binding.btnPaste.alpha = 0.3f
             }
             UIState.FINISHED -> {
                 binding.layoutLoading.fadeOut()
