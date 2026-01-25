@@ -1,0 +1,107 @@
+{
+  "project_info": {
+    "project_number": "525658331083",
+    "project_id": "downloaders-maui",
+    "storage_bucket": "downloaders-maui.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:525658331083:android:1d5cacae4fc78d366bc84e",
+        "android_client_info": {
+          "package_name": "com.mvxgreen.downloader4soundcloud"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBb_M4XN0rs0MdlZOTztwfbV6pmSA-kcnc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      },
+      "admob_app_id": "ca-app-pub-7417392682402637~3176078399"
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:525658331083:android:b5f212c90a1017356bc84e",
+        "android_client_info": {
+          "package_name": "com.mvxgreen.spotloader"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBb_M4XN0rs0MdlZOTztwfbV6pmSA-kcnc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:525658331083:android:df8d25a78f616a796bc84e",
+        "android_client_info": {
+          "package_name": "com.mvxgreen.ytdloader"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBb_M4XN0rs0MdlZOTztwfbV6pmSA-kcnc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:525658331083:android:2078c556246f61d26bc84e",
+        "android_client_info": {
+          "package_name": "com.xxxgreen.mvx.downloader4vsco"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBb_M4XN0rs0MdlZOTztwfbV6pmSA-kcnc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:525658331083:android:fcae615ba92d12506bc84e",
+        "android_client_info": {
+          "package_name": "green.mobileapps.instaloader"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBb_M4XN0rs0MdlZOTztwfbV6pmSA-kcnc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      },
+      "admob_app_id": "ca-app-pub-7417392682402637~9405504691"
+    }
+  ],
+  "configuration_version": "1"
+}

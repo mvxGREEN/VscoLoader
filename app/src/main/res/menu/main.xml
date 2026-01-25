@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:id="@+id/action_about"
+        android:orderInCategory="2"
+        android:title="@string/action_about"
+        app:showAsAction="never"
+        android:onClick="openBigFrag"/>
+    <item
+        android:id="@+id/action_rate"
+        android:orderInCategory="99"
+        android:title="@string/action_rate"
+        app:showAsAction="never"
+        android:onClick="onRateClick" />
+    <item
+        android:id="@+id/action_pp"
+        android:orderInCategory="101"
+        android:title="@string/action_pp"
+        app:showAsAction="never"
+        android:onClick="openBigFrag"/>
+
+</menu>
