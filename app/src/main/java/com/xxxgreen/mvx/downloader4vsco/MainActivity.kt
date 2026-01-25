@@ -229,7 +229,7 @@ class MainActivity : AppCompatActivity() {
         dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
 
         // Bind Dialog Listeners directly
-        dialogBinding.btnClose.setOnClickListener { dialog.dismiss() }
+        //dialogBinding.btnClose.setOnClickListener { dialog.dismiss() }
         dialogBinding.btnNah.setOnClickListener { dialog.dismiss() }
         dialogBinding.btnUpgrade.setOnClickListener {
             dialog.dismiss()

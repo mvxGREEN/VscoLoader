@@ -15,6 +15,7 @@ import java.io.FileOutputStream
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 
 object VscoLoader {
     private const val TAG = "VscoLoader"
@@ -343,7 +344,14 @@ object VscoLoader {
                 if (cursorVal.isNotEmpty() && cursorVal != "null" && !visitedCursors.contains(cursorVal)) {
                     visitedCursors.add(cursorVal)
 
-                    val newUrl = url.substringBefore("cursor=") + "cursor=" + cursorVal
+                    // VSCO cursors contain "+" and "=" which break the URL if not encoded.
+                    val encodedCursor = URLEncoder.encode(cursorVal, "UTF-8")
+
+                    // Reconstruct URL for next page
+                    val baseUrl = url.substringBefore("&cursor=")
+                    val newUrl = "$baseUrl&cursor=$encodedCursor"
+
+                    val nextEmptyCount = if (itemsAddedThisPage == 0) consecutiveEmptyPages + 1 else 0
 
                     // Recurse with updated counters
                     recursiveFetch(newUrl, cookie, headers, visitedCursors, nextEmptyCount)

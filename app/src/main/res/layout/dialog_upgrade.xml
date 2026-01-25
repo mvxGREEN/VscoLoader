@@ -13,22 +13,12 @@
         android:layout_height="wrap_content"
         android:padding="24dp">
 
-        <ImageButton
-            android:id="@+id/btnClose"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@drawable/ic_close"
-            app:tint="#666666"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
-
         <TextView
             android:id="@+id/tvUpgradeTitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Upgrade"
-            android:textColor="@android:color/black"
+            android:textColor="#444444"
             android:textSize="24sp"
             android:textStyle="bold"
             app:layout_constraintStart_toStartOf="parent"
@@ -39,7 +29,8 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:text="VscoLoader Gold"
+            android:text="VSLoader Gold"
+            android:textStyle="bold"
             android:textColor="#666666"
             android:textSize="16sp"
             app:layout_constraintStart_toStartOf="parent"
@@ -53,36 +44,32 @@
             android:orientation="vertical"
             app:layout_constraintTop_toBottomOf="@+id/tvUpgradeSubtitle">
 
-            <CheckBox
+            <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:checked="true"
-                android:clickable="false"
-                android:text="Profile downloader"
+                android:text="✅    Profiles\n"
                 android:textColor="@android:color/black"
-                android:buttonTint="#4CAF50"
                 android:paddingStart="8dp" />
 
-            <CheckBox
+            <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:checked="true"
-                android:clickable="false"
-                android:text="Collection downloader"
+                android:text="✅    Collections\n"
                 android:textColor="@android:color/black"
-                android:buttonTint="#4CAF50"
                 android:paddingStart="8dp" />
 
-            <CheckBox
+            <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:checked="true"
-                android:clickable="false"
-                android:text="No more ads!"
+                android:text="✅    Fastest downloads\n"
                 android:textColor="@android:color/black"
-                android:buttonTint="#4CAF50"
+                android:paddingStart="8dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="✅    Ad-Free!"
+                android:textColor="@android:color/black"
                 android:paddingStart="8dp" />
         </LinearLayout>
 
@@ -107,7 +94,7 @@
                 android:id="@+id/btnUpgrade"
                 android:layout_width="120dp"
                 android:layout_height="wrap_content"
-                android:backgroundTint="#FF8888"
+                android:backgroundTint="#4CAF50"
                 android:text="Upgrade"
                 android:textColor="@android:color/white" />
         </LinearLayout>
