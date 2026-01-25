@@ -3,6 +3,7 @@ package com.xxxgreen.mvx.downloader4vsco
 import android.Manifest
 import android.content.*
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.text.Editable
@@ -16,6 +17,7 @@ import androidx.cardview.widget.CardView
 import androidx.core.content.ContextCompat
 import com.bumptech.glide.Glide
 import com.google.android.gms.ads.*
+import com.google.android.material.appbar.MaterialToolbar
 import kotlinx.coroutines.*
 import org.jsoup.Jsoup
 import java.util.regex.Pattern
@@ -35,6 +37,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnAction: ImageButton
     private lateinit var webView: WebView
     private lateinit var adContainer: FrameLayout
+    private lateinit var toolbar: MaterialToolbar
 
     // --- Logic Variables ---
     private val VALID_INPUT_REGEX = Pattern.compile("^$|((?:vsco\\.)|(?:vs\\.)?co\\/)", Pattern.CASE_INSENSITIVE)
@@ -87,6 +90,41 @@ class MainActivity : AppCompatActivity() {
         btnAction = findViewById(R.id.btnAction)
         webView = findViewById(R.id.webView)
         adContainer = findViewById(R.id.adContainer)
+
+        // NEW TOOLBAR BINDING
+        toolbar = findViewById(R.id.toolbar)
+
+        // Handle Menu Clicks
+        toolbar.setOnMenuItemClickListener { menuItem ->
+            when (menuItem.itemId) {
+                R.id.action_upgrade -> {
+                    // Handle Upgrade
+                    true
+                }
+                /*
+                R.id.action_rate -> {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$packageName"))
+                    startActivity(intent)
+                    true
+                }
+                */
+                R.id.action_privacy -> {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://mobileapps.green/privacy-policy"))
+                    startActivity(intent)
+                    true
+                }
+                R.id.action_about -> {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://mobileapps.green/"))
+                    startActivity(intent)
+                    true
+                }
+                R.id.action_help -> {
+                    // Show help dialog
+                    true
+                }
+                else -> false
+            }
+        }
 
         setupListeners()
     }
