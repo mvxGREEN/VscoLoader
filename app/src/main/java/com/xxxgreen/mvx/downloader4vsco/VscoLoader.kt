@@ -2,6 +2,7 @@ package com.xxxgreen.mvx.downloader4vsco
 
 import android.app.DownloadManager
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.Environment
 import android.util.Log
@@ -53,18 +54,43 @@ object VscoLoader {
         File(absPathDocsTemp).mkdirs()
     }
 
+    // New Kill Switch Flag
+    var isCancelled = false
+
     fun resetVars() {
+        // When we start fresh, ensure we are NOT cancelled
+        isCancelled = false
+
         mMediaUrls.clear()
         mChunkUrls.clear()
         mTitle = ""
         isProfile = false
         isCollection = false
         mM3uUrl = ""
-        DownloadReceiver.reset()
 
         // Reset counters
         totalItems = 0
         completedItems = 0
+        DownloadReceiver.reset()
+    }
+
+    // --- NEW: CANCEL FUNCTION ---
+    fun cancelBatch(context: Context) {
+        // 1. Flip the Kill Switch
+        // This tells DownloadReceiver to IGNORE any downloads that finish after this point.
+        isCancelled = true
+
+        // 2. Clear the Queue
+        mMediaUrls.clear()
+        mChunkUrls.clear()
+
+        // 3. Stop the Service (Hides Notification)
+        val intent = Intent(context, DownloadService::class.java)
+        intent.action = "STOP_SERVICE"
+        context.startService(intent)
+
+        // 4. Clean up any partial video chunks
+        deleteTempFiles()
     }
 
     // --- DOWNLOADER FUNCTIONS ---

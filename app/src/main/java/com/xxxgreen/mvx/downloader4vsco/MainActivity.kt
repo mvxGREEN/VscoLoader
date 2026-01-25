@@ -123,7 +123,7 @@ class MainActivity : AppCompatActivity() {
                 // Delay slightly to let the user see the success message, then close
                 Handler(Looper.getMainLooper()).postDelayed({
                     finishAndRemoveTask() // Closes the app and removes from recents (optional) or just finish()
-                }, 1500)
+                }, 1000)
             } else {
                 Toast.makeText(context, "Saved to Documents!", Toast.LENGTH_SHORT).show()
             }
@@ -138,7 +138,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         // Setup Utilities
-        setupListeners() // Moved listeners here since views are already bound
+        setupListeners()
         VscoLoader.prepareFileDirs()
 
         // Billing & Ads
@@ -196,20 +196,38 @@ class MainActivity : AppCompatActivity() {
             }
             false // Return false so the standard OnClickListener still fires!
         }
+
         binding.btnPaste.setOnClickListener {
             val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             val clip = clipboard.primaryClip
             if (clip != null && clip.itemCount > 0) {
                 val text = clip.getItemAt(0).text.toString()
+
+                // 1. Set the text
+                // (This triggers the TextWatcher, which schedules a check 1 second later)
                 binding.etMainInput.setText(text)
+
+                // 2. CANCEL the 1-second wait immediately
+                // We know the user is done "typing" because they just pasted.
+                inputHandler.removeCallbacks(inputRunnable)
+
+                // 3. Force Instant Load
+                handleInput(text)
             }
         }
 
         // Clear Button
         binding.btnClear.setOnClickListener {
+            // 1. Cancel background work
+            VscoLoader.cancelBatch(this)
+
+            // 2. Clear Input
             binding.etMainInput.setText("")
-            VscoLoader.resetVars()
+
+            // 3. Reset UI to Empty State
             updateUI(UIState.EMPTY)
+
+            Toast.makeText(this, "Download Cancelled", Toast.LENGTH_SHORT).show()
         }
 
         // Action Button
@@ -546,6 +564,11 @@ class MainActivity : AppCompatActivity() {
 
         currentState = state
 
+        // 1. DEFAULT: Enable inputs (Reset to normal for EMPTY, PREVIEW, FINISHED)
+        binding.etMainInput.isEnabled = true
+        binding.btnPaste.isEnabled = true
+        binding.btnPaste.alpha = 1.0f
+
         when (state) {
             UIState.EMPTY -> {
                 binding.layoutLoading.fadeOut()
@@ -555,44 +578,39 @@ class MainActivity : AppCompatActivity() {
             UIState.LOADING -> {
                 binding.layoutLoading.fadeIn()
                 binding.previewCard.fadeOut()
-                //binding.bottomControlCard.fadeOut()
+                // binding.bottomControlCard.fadeOut() // Optional: keep hidden or show
             }
             UIState.PREVIEW -> {
                 binding.layoutLoading.fadeOut()
-
                 binding.previewCard.fadeIn()
                 binding.bottomControlCard.fadeIn()
-
-                // Ensure overlay is hidden
                 binding.overlayDownloading.fadeOut()
 
-                // Setup Button
                 binding.btnAction.setImageResource(R.drawable.ic_download)
                 binding.btnAction.isEnabled = true
                 binding.btnAction.fadeIn()
             }
             UIState.DOWNLOADING -> {
                 binding.layoutLoading.fadeOut()
-
-                // Keep preview and controls visible
                 binding.previewCard.fadeIn()
                 binding.bottomControlCard.fadeIn()
-
-                // Show Overlay
                 binding.overlayDownloading.fadeIn()
-
-                // Hide Action Button (Invisible to keep layout)
                 binding.btnAction.fadeOut(targetVisibility = View.INVISIBLE)
+
+                // --- NEW: LOCK INPUTS ---
+                // We disable the text box and paste button so the user can't interfere.
+                // The Clear button (btnClear) remains enabled so they can Cancel.
+                binding.etMainInput.isEnabled = false
+
+                binding.btnPaste.isEnabled = false
+                binding.btnPaste.alpha = 0.3f // Dim it so it looks disabled
             }
             UIState.FINISHED -> {
                 binding.layoutLoading.fadeOut()
                 binding.previewCard.fadeIn()
                 binding.bottomControlCard.fadeIn()
-
-                // Hide Overlay
                 binding.overlayDownloading.fadeOut()
 
-                // Show Checkmark
                 binding.btnAction.setImageResource(R.drawable.ic_check)
                 binding.btnAction.isEnabled = false
                 binding.btnAction.fadeIn()
@@ -780,7 +798,7 @@ class MainActivity : AppCompatActivity() {
 
     // --- ANIMATION HELPERS ---
 
-    private fun View.fadeIn(duration: Long = 300) {
+    private fun View.fadeIn(duration: Long = 200) {
         // If already visible and opaque, do nothing
         if (visibility == View.VISIBLE && alpha == 1f) return
 
@@ -799,7 +817,7 @@ class MainActivity : AppCompatActivity() {
             .start()
     }
 
-    private fun View.fadeOut(targetVisibility: Int = View.GONE, duration: Long = 150) {
+    private fun View.fadeOut(targetVisibility: Int = View.GONE, duration: Long = 100) {
         // If already in the target state, do nothing
         if (visibility == targetVisibility && alpha == 0f) return
 

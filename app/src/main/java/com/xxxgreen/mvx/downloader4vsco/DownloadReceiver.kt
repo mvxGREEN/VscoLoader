@@ -25,6 +25,12 @@ class DownloadReceiver : BroadcastReceiver() {
     }
 
     override fun onReceive(context: Context, intent: Intent) {
+        // If user pressed cancel, ignore all incoming "Download Complete" events.
+        if (VscoLoader.isCancelled) {
+            Log.d(TAG, "Download received but batch is CANCELLED. Ignoring.")
+            return
+        }
+
         val action = intent.action
 
         if (DownloadManager.ACTION_DOWNLOAD_COMPLETE == action) {
