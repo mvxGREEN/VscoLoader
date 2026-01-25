@@ -21,8 +21,17 @@ import com.google.android.material.appbar.MaterialToolbar
 import kotlinx.coroutines.*
 import org.jsoup.Jsoup
 import java.util.regex.Pattern
+import android.app.AlertDialog
+import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
+import android.view.LayoutInflater
+import com.android.billingclient.api.*
 
 class MainActivity : AppCompatActivity() {
+
+    private lateinit var billingClient: BillingClient
+    private var productDetails: ProductDetails? = null
+    private val PRODUCT_ID = "vscoloader_gold"
 
     // --- UI Components ---
     private lateinit var etInput: EditText
@@ -68,6 +77,18 @@ class MainActivity : AppCompatActivity() {
         checkPermissions()
         setupWebView()
 
+        // 2. Initialize Billing
+        setupBilling()
+
+        // Check status immediately on launch
+        val prefs = getSharedPreferences("com.xxxgreen.mvx.prefs", Context.MODE_PRIVATE)
+        val isGold = prefs.getBoolean("IS_GOLD", false)
+
+        // 3. Init Ads (Load only if NOT Gold)
+        checkSubscriptionAndLoadAds(isGold)
+
+        updateUpgradeIcon(isGold)
+
         // 3. Register Receiver (API 33+ Compatible)
         val filter = IntentFilter("DOWNLOAD_FINISHED_ACTION")
         ContextCompat.registerReceiver(this, finishReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
@@ -98,7 +119,7 @@ class MainActivity : AppCompatActivity() {
         toolbar.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
                 R.id.action_upgrade -> {
-                    // Handle Upgrade
+                    showUpgradeDialog()
                     true
                 }
                 /*
@@ -119,7 +140,7 @@ class MainActivity : AppCompatActivity() {
                     true
                 }
                 R.id.action_help -> {
-                    // Show help dialog
+                    // TODO show help dialog
                     true
                 }
                 else -> false
@@ -370,5 +391,193 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         unregisterReceiver(finishReceiver)
+    }
+
+    // --- BILLING SETUP ---
+    private fun setupBilling() {
+        billingClient = BillingClient.newBuilder(this)
+            .setListener(purchasesUpdatedListener)
+            .enablePendingPurchases()
+            .build()
+
+        startBillingConnection()
+    }
+
+    private fun startBillingConnection() {
+        billingClient.startConnection(object : BillingClientStateListener {
+            override fun onBillingSetupFinished(billingResult: BillingResult) {
+                if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
+                    Log.d("Billing", "Setup finished")
+                    queryProductDetails()
+                    queryActivePurchases() // Check if user already has it
+                }
+            }
+            override fun onBillingServiceDisconnected() {
+                // Retry logic could go here
+                Log.d("Billing", "Disconnected")
+            }
+        })
+    }
+
+    private fun queryProductDetails() {
+        val productList = listOf(
+            QueryProductDetailsParams.Product.newBuilder()
+                .setProductId(PRODUCT_ID)
+                .setProductType(BillingClient.ProductType.SUBS)
+                .build()
+        )
+
+        val params = QueryProductDetailsParams.newBuilder()
+            .setProductList(productList)
+            .build()
+
+        billingClient.queryProductDetailsAsync(params) { billingResult, productDetailsList ->
+            if (billingResult.responseCode == BillingClient.BillingResponseCode.OK && productDetailsList.isNotEmpty()) {
+                productDetails = productDetailsList[0]
+                Log.d("Billing", "Product Loaded: ${productDetails?.name}")
+            }
+        }
+    }
+
+    // Check if user is already Gold on startup
+    private fun queryActivePurchases() {
+        val params = QueryPurchasesParams.newBuilder()
+            .setProductType(BillingClient.ProductType.SUBS)
+            .build()
+
+        billingClient.queryPurchasesAsync(params) { billingResult, purchases ->
+            if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
+                var isGold = false
+                for (purchase in purchases) {
+                    if (purchase.products.contains(PRODUCT_ID) && purchase.purchaseState == Purchase.PurchaseState.PURCHASED) {
+                        isGold = true
+                        if (!purchase.isAcknowledged) {
+                            handlePurchase(purchase)
+                        }
+                    }
+                }
+                saveGoldStatus(isGold)
+            }
+        }
+    }
+
+    private val purchasesUpdatedListener = PurchasesUpdatedListener { billingResult, purchases ->
+        if (billingResult.responseCode == BillingClient.BillingResponseCode.OK && purchases != null) {
+            for (purchase in purchases) {
+                handlePurchase(purchase)
+            }
+        } else if (billingResult.responseCode == BillingClient.BillingResponseCode.USER_CANCELED) {
+            Toast.makeText(this, "Cancelled", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(this, "Error: ${billingResult.debugMessage}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun handlePurchase(purchase: Purchase) {
+        if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED) {
+            if (!purchase.isAcknowledged) {
+                val acknowledgePurchaseParams = AcknowledgePurchaseParams.newBuilder()
+                    .setPurchaseToken(purchase.purchaseToken)
+                    .build()
+
+                billingClient.acknowledgePurchase(acknowledgePurchaseParams) { billingResult ->
+                    if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
+                        runOnUiThread {
+                            Toast.makeText(this, "Thank you for your support <3", Toast.LENGTH_LONG).show()
+                            saveGoldStatus(true)
+                            // Refresh UI
+                            recreate()
+                        }
+                    }
+                }
+            } else {
+                saveGoldStatus(true)
+            }
+        }
+    }
+
+    private fun saveGoldStatus(isGold: Boolean) {
+        val prefs = getSharedPreferences("com.xxxgreen.mvx.prefs", Context.MODE_PRIVATE)
+        prefs.edit().putBoolean("IS_GOLD", isGold).apply()
+
+        checkSubscriptionAndLoadAds(isGold)
+
+        // UPDATE ICON IMMEDIATELY
+        runOnUiThread {
+            updateUpgradeIcon(isGold)
+        }
+    }
+
+    private fun checkSubscriptionAndLoadAds(isGold: Boolean) {
+        if (!isGold) {
+            initAdMob()
+        } else {
+            adContainer.removeAllViews()
+            adContainer.visibility = View.GONE
+        }
+    }
+
+    // --- NEW HELPER FUNCTION ---
+    private fun updateUpgradeIcon(isGold: Boolean) {
+        // Access the menu item from the toolbar
+        val upgradeItem = toolbar.menu.findItem(R.id.action_upgrade)
+
+        if (upgradeItem != null) {
+            if (isGold) {
+                // 1. Set Color to Gold (#FFD700)
+                upgradeItem.icon?.setTint(Color.parseColor("#FFD700"))
+
+                // 2. Disable clicking
+                upgradeItem.isEnabled = false
+            } else {
+                // Default State (White or Theme default)
+                upgradeItem.icon?.setTintList(null) // Reset tint
+                upgradeItem.isEnabled = true
+            }
+        }
+    }
+
+    // --- UPGRADE DIALOG ---
+    private fun showUpgradeDialog() {
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_upgrade, null)
+
+        val builder = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .setCancelable(true)
+
+        val dialog = builder.create()
+        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT)) // Transparent for rounded corners
+
+        // Handle Clicks
+        dialogView.findViewById<View>(R.id.btnClose).setOnClickListener { dialog.dismiss() }
+        dialogView.findViewById<View>(R.id.btnNah).setOnClickListener { dialog.dismiss() }
+
+        dialogView.findViewById<View>(R.id.btnUpgrade).setOnClickListener {
+            dialog.dismiss()
+            launchBillingFlow()
+        }
+
+        dialog.show()
+    }
+
+    private fun launchBillingFlow() {
+        if (productDetails != null) {
+            val offerToken = productDetails!!.subscriptionOfferDetails?.get(0)?.offerToken ?: ""
+
+            val productDetailsParamsList = listOf(
+                BillingFlowParams.ProductDetailsParams.newBuilder()
+                    .setProductDetails(productDetails!!)
+                    .setOfferToken(offerToken)
+                    .build()
+            )
+
+            val billingFlowParams = BillingFlowParams.newBuilder()
+                .setProductDetailsParamsList(productDetailsParamsList)
+                .build()
+
+            billingClient.launchBillingFlow(this, billingFlowParams)
+        } else {
+            Toast.makeText(this, "Billing not ready yet. Please try again in a moment.", Toast.LENGTH_SHORT).show()
+        }
     }
 }
