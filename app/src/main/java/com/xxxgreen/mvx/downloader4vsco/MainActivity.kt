@@ -10,6 +10,8 @@ import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.text.Editable
 import android.text.TextWatcher
 import android.util.Log
@@ -34,6 +36,9 @@ import android.widget.ProgressBar
 import android.widget.TextView
 
 class MainActivity : AppCompatActivity() {
+    private val bannerIdTest = "ca-app-pub-3940256099942544/6300978111" // Test ID
+    private val bannerIdReal = "ca-app-pub-7417392682402637/1939309490" // Real ID
+    private val bannerId = bannerIdTest
 
     // 1. Declare Binding Object
     private lateinit var binding: ActivityMainBinding
@@ -48,6 +53,25 @@ class MainActivity : AppCompatActivity() {
     private lateinit var billingClient: BillingClient
     private var productDetails: ProductDetails? = null
     private val PRODUCT_ID = "vscoloader_gold"
+
+    private var lastLoadedUrl = ""
+
+    private val textWatcher = object : TextWatcher {
+        override fun afterTextChanged(s: Editable?) {
+            binding.btnClear.visibility = if (s.isNullOrEmpty()) View.GONE else View.VISIBLE
+        }
+        override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+
+        override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+            val lengthDiff = count - before
+            // Simplified Logic: We no longer need to check !isShared here
+            if (lengthDiff > 1) {
+                handleInput(s.toString())
+            } else if (s.isNullOrEmpty()) {
+                updateUI(UIState.EMPTY)
+            }
+        }
+    }
 
     enum class UIState {
         EMPTY, LOADING, PREVIEW, DOWNLOADING, FINISHED
@@ -77,7 +101,18 @@ class MainActivity : AppCompatActivity() {
         override fun onReceive(context: Context?, intent: Intent?) {
             Log.d("MainActivity", "Download finished broadcast received")
             updateUI(UIState.FINISHED)
-            Toast.makeText(context, "Saved to Documents!", Toast.LENGTH_SHORT).show()
+
+            // Check if this session was initiated via Share
+            if (VscoLoader.isShared) {
+                Toast.makeText(context, "Saved!", Toast.LENGTH_LONG).show()
+
+                // Delay slightly to let the user see the success message, then close
+                Handler(Looper.getMainLooper()).postDelayed({
+                    finishAndRemoveTask() // Closes the app and removes from recents (optional) or just finish()
+                }, 1500)
+            } else {
+                Toast.makeText(context, "Saved to Documents!", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -107,14 +142,16 @@ class MainActivity : AppCompatActivity() {
 
         // Register Receiver
         val filter = IntentFilter("DOWNLOAD_FINISHED_ACTION")
-        ContextCompat.registerReceiver(this, finishReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+        ContextCompat.registerReceiver(this, finishReceiver,
+            filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED)
 
         val progressFilter = IntentFilter(DownloadService.PROGRESS_UPDATE_ACTION)
         ContextCompat.registerReceiver(this, progressReceiver, progressFilter, ContextCompat.RECEIVER_NOT_EXPORTED)
 
         // Initial State
         updateUI(UIState.EMPTY)
-        handleSharedIntent()
+        checkIntent(intent)
     }
 
     // --- VIEW BINDING SETUP ---
@@ -146,20 +183,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // Text Watcher
-        binding.etMainInput.addTextChangedListener(object : TextWatcher {
-            override fun afterTextChanged(s: Editable?) {
-                binding.btnClear.visibility = if (s.isNullOrEmpty()) View.GONE else View.VISIBLE
-            }
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                val lengthDiff = count - before
-                if (lengthDiff > 1) {
-                    handleInput(s.toString())
-                } else if (s.isNullOrEmpty()) {
-                    updateUI(UIState.EMPTY)
-                }
-            }
-        })
+        binding.etMainInput.addTextChangedListener(textWatcher)
     }
 
     private fun setupToolbarMenu() {
@@ -274,14 +298,18 @@ class MainActivity : AppCompatActivity() {
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                if (url != null) {
+
+                // 5. FIX: PREVENT DUPLICATE REDIRECTS
+                // WebViews often fire onPageFinished multiple times for redirects.
+                // We ignore if it's the exact same URL we just processed.
+                if (url != null && url != lastLoadedUrl) {
+                    lastLoadedUrl = url
+
                     val username = VscoLoader.extractUsernameFromUrl(url)
                     if (username.isNotEmpty() && username != "api") {
                         VscoLoader.mTitle = username
                     }
 
-                    // FIX: Detect if Shortlink resolved to a Single Media page
-                    // If so, stop waiting for Profile API and switch to Scraper logic
                     if (url.contains("/media/") || url.contains("/video/")) {
                         Log.d("MainActivity", "Shortlink resolved to Media: $url")
                         loadMediaData(url)
@@ -597,18 +625,34 @@ class MainActivity : AppCompatActivity() {
         MobileAds.initialize(this) {}
         val adView = AdView(this)
         adView.setAdSize(AdSize.BANNER)
-        adView.adUnitId = "ca-app-pub-3940256099942544/6300978111" // Test ID
+        adView.adUnitId = bannerId
         binding.adContainer.addView(adView)
         adView.loadAd(AdRequest.Builder().build())
     }
 
-    private fun handleSharedIntent() {
-        if (intent?.action == Intent.ACTION_SEND) {
-            val text = intent.getStringExtra(Intent.EXTRA_TEXT)
-            if (text != null) {
+    // Since launchMode is singleInstance, new shares will call this if app is already open
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent) // Update the activity's intent reference
+        checkIntent(intent)
+    }
+
+    private fun checkIntent(intent: Intent?) {
+        if (intent?.action == Intent.ACTION_SEND && intent.type == "text/plain") {
+            val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
+            if (sharedText != null) {
+                Log.d("MainActivity", "Received Shared Intent: $sharedText")
+
                 VscoLoader.isShared = true
-                binding.etMainInput.setText(text)
-                handleInput(text)
+
+                // 3. FIX: DETACH LISTENER -> SET TEXT -> RE-ATTACH
+                // This ensures the TextWatcher logic DOES NOT FIRE for this specific update
+                binding.etMainInput.removeTextChangedListener(textWatcher)
+                binding.etMainInput.setText(sharedText)
+                binding.etMainInput.addTextChangedListener(textWatcher)
+
+                // 4. Manual Trigger (Only one download starts)
+                handleInput(sharedText)
             }
         }
     }
