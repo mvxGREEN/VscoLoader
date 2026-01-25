@@ -80,40 +80,77 @@ object VscoLoader {
         dm.enqueue(request)
     }
 
-    fun extractUrlsFromM3u(): List<String> {
+    // State variables for the receiver to track
+    var mCountChunks = 0
+    var mCountChunksFinal = 0
+
+    // HELPER: Download a specific TS chunk
+    fun downloadTs(context: Context, url: String, index: Int) {
+        val fileName = "s$index.ts"
+        // Log.d(TAG, "DownloadTs url=$url index=$index")
+
+        val request = DownloadManager.Request(Uri.parse(url))
+            .setTitle("ts download")
+            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_HIDDEN) // Hide chunk downloads
+            .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOCUMENTS, "temp/$fileName")
+
+        val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        dm.enqueue(request)
+    }
+
+    // HELPER: Read the downloaded .m3u8 file and extract lines
+    fun extractUrlsFromM3u(): MutableList<String> {
         val urls = mutableListOf<String>()
         val file = File(absPathDocs + mM3uFileName + ".m3u8")
-        if (file.exists()) {
-            file.readLines().forEach { line ->
-                if (!line.startsWith("#") && line.isNotEmpty()) {
-                    urls.add(line)
+
+        try {
+            if (file.exists()) {
+                file.forEachLine { line ->
+                    // Standard M3U parsing: skip comments
+                    if (!line.startsWith("#") && line.isNotBlank()) {
+                        urls.add(line)
+                    }
                 }
+                // Delete the playlist file after reading
+                file.delete()
             }
-            file.delete()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error parsing m3u", e)
         }
         return urls
     }
 
+    // HELPER: Combine all .ts files into one .mp4
     fun concatTs(): String {
+        Log.d(TAG, "ConcatTs started")
         val destPath = getUniqueFilePath(absPathDocs + mTitle + ".mp4")
-        mFilePath = destPath
+        mFilePath = destPath // Save for scanning later
+
+        val tempDir = File(absPathDocsTemp)
+
+        // Ensure we grab files s0.ts, s1.ts, s2.ts in correct integer order
+        val chunkFiles = tempDir.listFiles { _, name -> name.endsWith(".ts") }
+            ?.sortedBy {
+                // Extract the number between 's' and '.ts'
+                it.name.substringAfter("s").substringBefore(".ts").toIntOrNull() ?: 0
+            }
+
+        if (chunkFiles.isNullOrEmpty()) {
+            Log.e(TAG, "No chunks found to concat")
+            return ""
+        }
 
         try {
             FileOutputStream(destPath).use { output ->
-                // Assuming s0.ts, s1.ts... based on original logic
-                // In a real scenario, sort the temp files strictly
-                val tempDir = File(absPathDocsTemp)
-                val files = tempDir.listFiles { _, name -> name.endsWith(".ts") }
-                files?.sortBy { it.nameWithoutExtension.removePrefix("s").toIntOrNull() ?: 0 }
-
-                files?.forEach { file ->
+                chunkFiles.forEach { file ->
                     file.inputStream().use { input ->
                         input.copyTo(output)
                     }
                 }
             }
+            Log.d(TAG, "Concat finished: $destPath")
         } catch (e: Exception) {
-            Log.e(TAG, "Concat failed", e)
+            Log.e(TAG, "Concat error", e)
         }
         return destPath
     }
