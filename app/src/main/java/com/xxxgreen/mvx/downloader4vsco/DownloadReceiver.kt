@@ -30,15 +30,17 @@ class DownloadReceiver : BroadcastReceiver() {
         if (DownloadManager.ACTION_DOWNLOAD_COMPLETE == action) {
             Log.d(TAG, "Download Complete Received")
 
-            // Case 1: We just downloaded the playlist file (.m3u8)
-            // (In C#: if (MCountChunksFinal == 0 && MM3uUrl != ""))
+            // Case 1: Playlist just finished downloading
             if (VscoLoader.mCountChunksFinal == 0 && VscoLoader.mM3uUrl.isNotEmpty()) {
                 handlePlaylistDownload(context)
             }
-            // Case 2: We are in the middle of downloading chunks
-            // (In C#: else if (MCountChunks < MCountChunksFinal))
-            else if (VscoLoader.mCountChunks < VscoLoader.mCountChunksFinal) {
+            // Case 2: A video chunk finished downloading
+            else if (VscoLoader.mCountChunksFinal > 0 && VscoLoader.mCountChunks < VscoLoader.mCountChunksFinal) {
                 handleChunkDownload(context)
+            }
+            // Case 3 (MISSING): Standard File (Image/Video) finished
+            else {
+                handleStandardDownload(context)
             }
         }
     }
@@ -120,10 +122,45 @@ class DownloadReceiver : BroadcastReceiver() {
         }
     }
 
+    private fun handleStandardDownload(context: Context) {
+        Log.d(TAG, "Standard media file downloaded.")
+
+        CoroutineScope(Dispatchers.IO).launch {
+            // 1. Scan the file so it appears in Gallery immediately
+            // Note: For standard downloads, DownloadManager usually handles scanning,
+            // but we do it manually to be safe or if we renamed it.
+            val filePath = VscoLoader.absPathDocs + VscoLoader.mTitle +
+                    (if (VscoLoader.mThumbnailFilename.contains("jpg")) ".jpg" else ".mp4")
+            scanMediaFile(context, filePath)
+
+            // 2. Check if there are more items to download (Gallery/Collection support)
+            if (VscoLoader.mMediaUrls.isNotEmpty()) {
+                Log.d(TAG, "Downloading next item in queue...")
+                val nextUrl = VscoLoader.mMediaUrls.removeAt(0)
+
+                withContext(Dispatchers.Main) {
+                    VscoLoader.downloadFile(context, nextUrl)
+                }
+            } else {
+                // 3. Queue empty? All done.
+                Log.d(TAG, "Queue empty. Sending FINISHED broadcast.")
+                withContext(Dispatchers.Main) {
+                    val finishIntent = Intent("DOWNLOAD_FINISHED_ACTION")
+                    finishIntent.setPackage(context.packageName) // Security fix
+                    context.sendBroadcast(finishIntent)
+                }
+            }
+        }
+    }
+
     private fun scanMediaFile(context: Context, path: String) {
-        val file = File(path)
-        val uri = android.net.Uri.fromFile(file)
-        val scanIntent = Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, uri)
-        context.sendBroadcast(scanIntent)
+        try {
+            val file = File(path)
+            val uri = android.net.Uri.fromFile(file)
+            val scanIntent = Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, uri)
+            context.sendBroadcast(scanIntent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error scanning file", e)
+        }
     }
 }
