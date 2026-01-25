@@ -15,12 +15,15 @@ import androidx.core.content.ContextCompat
 import com.bumptech.glide.Glide
 import com.google.android.gms.ads.*
 import com.google.android.material.textfield.TextInputEditText
-import com.xxxgreen.mvx.downloader4vsco.VscoLoader.extractDownloadUrls
-import com.xxxgreen.mvx.downloader4vsco.VscoLoader.extractThumbnail
+import android.text.Editable
+import android.text.TextWatcher
+import android.webkit.CookieManager
+import java.util.regex.Pattern
 import kotlinx.coroutines.*
 import org.jsoup.Jsoup
 
 class MainActivity : AppCompatActivity() {
+    private val VALID_INPUT_REGEX = Pattern.compile("^$|((?:vsco\\.)|(?:vs\\.)?co\\/)", Pattern.CASE_INSENSITIVE)
 
     private lateinit var etInput: TextInputEditText
     private lateinit var ivPreview: ImageView
@@ -107,39 +110,137 @@ class MainActivity : AppCompatActivity() {
                 handleInput(text)
             }
         }
+
+        setupInputListener()
     }
 
-    private fun handleInput(input: String) {
-        val url = extractUrl(input) ?: return
+    private fun setupInputListener() {
+        etInput.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
 
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                // Logic from C# OnTextChanged:
+                // Only trigger if text was added (length grew) and it wasn't just 1 char (typing)
+                // "lengthDiff > 1" usually implies a paste.
+                val lengthDiff = count - before
+
+                if (lengthDiff > 1) {
+                    val input = s.toString()
+                    handleInput(input)
+                } else if (s.isNullOrEmpty()) {
+                    resetUI()
+                }
+            }
+
+            override fun afterTextChanged(s: Editable?) {}
+        })
+    }
+
+    private fun handleInput(rawInput: String) {
+        var input = rawInput.trim()
+
+        // 1. Basic Cleaning
+        if (input.contains("http://")) {
+            input = input.replace("http://", "https://")
+        }
+        if (input.endsWith("/")) {
+            input = input.substring(0, input.length - 1)
+        }
+
+        // 2. Regex Validation
+        val matcher = VALID_INPUT_REGEX.matcher(input)
+        if (!matcher.find()) {
+            Log.d("MainActivity", "Invalid Input: $input")
+            return
+        }
+
+        // 3. Extraction (Ported from HandleInput)
+        var url = "https://"
+        when {
+            input.contains("vs.co") -> url += input.substring(input.indexOf("vs.co"))
+            input.contains("vsco.co") -> url += input.substring(input.indexOf("vsco.co"))
+            input.contains("https://") -> url = input // Already full url
+            else -> {
+                // Fallback for simple pastes without protocol
+                if (input.contains("vsco.co")) {
+                    url += input.substring(input.indexOf("vsco.co"))
+                }
+            }
+        }
+
+        Log.d("MainActivity", "Extracted URL: $url")
+
+        // 4. Gold/Profile Check (Ported Logic)
+        // If it is a collection or gallery, we must use WebView, otherwise we scrape directly.
+        if (url.contains("/collection")) {
+            VscoLoader.isCollection = true
+            url += "/1"
+            loadInWebView(url)
+        } else if (!url.contains("/media") && !url.contains("/video") && !url.contains("vs.co")) {
+            // It's likely a profile
+            VscoLoader.isProfile = true
+            url += "/gallery"
+            loadInWebView(url)
+        } else {
+            // It's a specific media file -> Scrape it
+            loadMediaData(url)
+        }
+    }
+
+    private fun loadInWebView(url: String) {
+        Log.d("MainActivity", "Loading in WebView: $url")
         showLoading(true)
 
-        // Launch a coroutine
+        webView.visibility = View.INVISIBLE // Keep invisible, we just want it to process logic
+        webView.loadUrl(url)
+
+        // Note: Your MWebViewClient logic handles the scraping from here
+    }
+
+    private fun loadMediaData(url: String) {
+        Log.d("MainActivity", "Loading Media Data: $url")
+        showLoading(true)
+
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                // 1. Fetch the main HTML
-                val doc = Jsoup.connect(url).userAgent("Mozilla/5.0...").get()
-                val html = doc.html()
+                // 1. Fetch HTML
+                val doc = Jsoup.connect(url)
+                    .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                    .get()
 
-                // 2. Extract Title
-                val title = doc.title().substringBefore("|").trim()
+                val html = doc.html()
+                val head = doc.head().html() // VscoLoader.cs used head+body sometimes
+
+                // 2. Extract Title (Ported logic)
+                var title = doc.title()
+                if (title.contains("|")) title = title.substringBefore("|")
+                title = title.trim().replace(" ", "")
                 VscoLoader.mTitle = title
 
-                // 3. Extract Thumbnail (Synchronous)
-                val thumbUrl = VscoLoader.extractThumbnail(url, html)
+                // 3. Extract Thumbnail
+                val thumbUrl = VscoLoader.extractThumbnail(url, head + html)
 
-                // 4. Extract Media URLs (Suspend/Async)
-                // This will internally do the network call for videos if needed
-                val mediaUrls = VscoLoader.extractDownloadUrls(url, html)
-                VscoLoader.mMediaUrls.addAll(mediaUrls)
+                // 4. Extract Download URLs (Suspend function)
+                val downloadUrls = VscoLoader.extractDownloadUrls(url, head + html)
+                VscoLoader.mMediaUrls.clear()
+                VscoLoader.mMediaUrls.addAll(downloadUrls)
 
-                // 5. Update UI on Main Thread
+                // 5. Update UI
                 withContext(Dispatchers.Main) {
                     if (VscoLoader.mMediaUrls.isNotEmpty()) {
-                        tvTitle.text = title
-                        // Use Glide to load the extracted thumbnail
-                        Glide.with(this@MainActivity).load(thumbUrl).into(ivPreview)
+                        // Load thumbnail into ImageView
+                        Glide.with(this@MainActivity)
+                            .load(thumbUrl)
+                            .centerCrop()
+                            .into(ivPreview)
+
+                        tvTitle.text = VscoLoader.mTitle
                         showPreviewUI()
+
+                        // If shared intent, start download immediately
+                        if (VscoLoader.isShared) {
+                            startDownloadService()
+                        }
                     } else {
                         Toast.makeText(this@MainActivity, "No media found", Toast.LENGTH_SHORT).show()
                         showLoading(false)
@@ -147,8 +248,9 @@ class MainActivity : AppCompatActivity() {
                 }
 
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.e("MainActivity", "Error loading HTML", e)
                 withContext(Dispatchers.Main) {
+                    Toast.makeText(this@MainActivity, "Failed to load link", Toast.LENGTH_SHORT).show()
                     showLoading(false)
                 }
             }
