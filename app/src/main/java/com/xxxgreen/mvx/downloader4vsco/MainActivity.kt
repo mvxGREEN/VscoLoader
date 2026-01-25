@@ -35,6 +35,7 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebViewClient
 import android.widget.ProgressBar
 import android.widget.TextView
+import com.xxxgreen.mvx.downloader4vsco.render.animal.GhostsEyeLoadingRenderer
 
 class MainActivity : AppCompatActivity() {
     private val bannerIdTest = "ca-app-pub-3940256099942544/6300978111" // Test ID
@@ -97,13 +98,13 @@ class MainActivity : AppCompatActivity() {
             val total = intent?.getIntExtra("total", 0) ?: 0
 
             if (total > 0) {
-                // Update Overlay UI
+                // Update determinate progress bar
+                /*
                 val progressBar = findViewById<ProgressBar>(R.id.pbOverlay)
-                // (Note: Ensure your XML ID matches, see step 5)
-
                 progressBar.isIndeterminate = false
                 progressBar.max = total
                 progressBar.progress = completed
+                 */
 
                 val tvProgress = findViewById<TextView>(R.id.tvOverlayProgress)
                 tvProgress.text = "$completed / $total"
@@ -147,22 +148,26 @@ class MainActivity : AppCompatActivity() {
         val isGold = prefs.getBoolean("IS_GOLD", false)
         checkSubscriptionAndLoadAds(isGold)
 
+        // check permissions
+        checkPermissions()
+
         // Setup Toolbar
         updateUpgradeIcon(isGold)
         setupToolbarMenu()
 
-        // check permissions
-        checkPermissions()
+        // Custom Progress Bar
+        setupCustomLoader()
 
         // Setup Webview
         setupWebView()
 
-        // Register Receiver
+        // Finish Receiver
         val filter = IntentFilter("DOWNLOAD_FINISHED_ACTION")
         ContextCompat.registerReceiver(this, finishReceiver,
             filter,
             ContextCompat.RECEIVER_NOT_EXPORTED)
 
+        // Progress Receiver
         val progressFilter = IntentFilter(DownloadService.PROGRESS_UPDATE_ACTION)
         ContextCompat.registerReceiver(this, progressReceiver, progressFilter, ContextCompat.RECEIVER_NOT_EXPORTED)
 
@@ -184,21 +189,6 @@ class MainActivity : AppCompatActivity() {
 
         // Text Watcher
         binding.etMainInput.addTextChangedListener(textWatcher)
-
-        // Paste Button
-        binding.btnPaste.setOnTouchListener { v, event ->
-            when (event.action) {
-                // When pressed: Turn Gold
-                android.view.MotionEvent.ACTION_DOWN -> {
-                    (v as? android.widget.ImageView)?.setColorFilter(Color.parseColor("#FFD700"))
-                }
-                // When released or cancelled: Revert to original
-                android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
-                    (v as? android.widget.ImageView)?.clearColorFilter()
-                }
-            }
-            false // Return false so the standard OnClickListener still fires!
-        }
 
         // Paste button
         binding.btnPaste.setOnClickListener {
@@ -247,6 +237,27 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         updateBackgroundMenuVisibility()
+
+        // --- RESTORE STATE FIX ---
+        // If we are currently showing "Empty" or "Loading", but we actually HAVE data,
+        // force the UI back to the Preview state.
+        if (currentState == UIState.EMPTY && VscoLoader.mMediaUrls.isNotEmpty()) {
+
+            // 1. Restore the Title
+            binding.tvTitle.text = VscoLoader.mTitle.ifEmpty { "Items Found" }
+
+            // 2. Restore the Image (Use override to force size if view is not measured yet)
+            if (isValidContextForGlide(this)) {
+                Glide.with(this)
+                    .load(VscoLoader.mMediaUrls[0])
+                    .override(1000, 1000) // Force load even if view is GONE/0dp
+                    .centerCrop()
+                    .into(binding.ivPreview)
+            }
+
+            // 3. Force the UI visible
+            updateUI(UIState.PREVIEW)
+        }
     }
 
     private fun updateBackgroundMenuVisibility() {
@@ -546,6 +557,23 @@ class MainActivity : AppCompatActivity() {
             return !context.isDestroyed && !context.isFinishing
         }
         return true
+    }
+
+    private fun setupCustomLoader() {
+        // Example 1: Collision Renderer (Two balls hitting each other)
+        val renderer = GhostsEyeLoadingRenderer(this)
+
+        // Example 2: Electric Fan (Uncomment to use)
+        // val renderer = com.dinuscxj.loadingdrawable.render.shapechange.CoolWaitLoadingRenderer(this)
+
+        // Example 3: Gear (Uncomment to use)
+        // val renderer = com.dinuscxj.loadingdrawable.render.shape.GearLoadingRenderer(this)
+
+        // Customization (Optional)
+        // You can change colors, widths, etc. depending on the renderer
+        // renderer.setColor(getColor(R.color.color_accent))
+
+        binding.customLoader.setLoadingRenderer(renderer)
     }
 
     private fun loadMediaData(url: String) {

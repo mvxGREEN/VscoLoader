@@ -77,7 +77,7 @@
             android:layout_height="48dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@drawable/ic_paste"
-            app:tint="@color/text_primary" />
+            app:tint="@color/selector_paste_tint" />
     </LinearLayout>
 
     <LinearLayout
@@ -94,8 +94,8 @@
         app:layout_constraintEnd_toEndOf="parent">
 
         <ProgressBar
-            android:layout_width="60dp"
-            android:layout_height="60dp"
+            android:layout_width="100dp"
+            android:layout_height="100dp"
             android:elevation="8dp"
             android:indeterminateTint="@color/color_accent" />
 
@@ -149,15 +149,24 @@
                     android:gravity="center"
                     android:orientation="vertical">
 
-                    <ProgressBar
+                    <!-- TODO remove?
+                        <ProgressBar
                         android:id="@+id/pbOverlay"
                         style="?android:attr/progressBarStyleHorizontal"
                         android:layout_width="150dp"
                         android:layout_height="wrap_content"
+                        android:elevation="8dp"
                         android:indeterminate="false"
                         android:max="100"
                         android:progress="0"
                         android:progressTint="@color/color_accent" />
+                    -->
+
+                    <com.xxxgreen.mvx.downloader4vsco.LoadingView
+                        android:id="@+id/customLoader"
+                        android:elevation="8dp"
+                        android:layout_width="60dp"
+                        android:layout_height="60dp" />
 
                     <TextView
                         android:id="@+id/tvOverlayProgress"
@@ -207,6 +216,7 @@
                 android:id="@+id/btnAction"
                 android:layout_width="48dp"
                 android:layout_height="48dp"
+                android:elevation="8dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:src="@drawable/ic_download"
                 app:tint="@color/text_primary"
