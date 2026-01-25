@@ -272,16 +272,23 @@ object VscoLoader {
     }
 
     // --- UPDATED PROFILE LOGIC ---
-    suspend fun processProfile(initialUrl: String, cookie: String, headers: Map<String, String>) {
+    suspend fun processProfile(
+        initialUrl: String,
+        cookie: String,
+        headers: Map<String, String>,
+        onProgress: (Int) -> Unit // <--- NEW CALLBACK
+    ) {
         Log.d(TAG, "Processing Profile: $initialUrl")
 
         var nextUrl = initialUrl
         if (nextUrl.contains("limit=")) {
             nextUrl = nextUrl.substringBefore("limit=") + "limit=14&cursor="
+        } else {
+            nextUrl += "&limit=14&cursor="
         }
 
         val visitedCursors = mutableSetOf<String>()
-        recursiveFetch(nextUrl, cookie, headers, visitedCursors, 0)
+        recursiveFetch(nextUrl, cookie, headers, visitedCursors, 0, onProgress)
     }
 
     private suspend fun recursiveFetch(
@@ -289,77 +296,64 @@ object VscoLoader {
         cookie: String,
         headers: Map<String, String>,
         visitedCursors: MutableSet<String>,
-        consecutiveEmptyPages: Int
+        consecutiveEmptyPages: Int,
+        onProgress: (Int) -> Unit // <--- NEW CALLBACK
     ) {
-        // SAFETY 1: Hard Limit on recursion depth (optional but good practice)
-        if (visitedCursors.size > 200) {
-            Log.d(TAG, "Hit max page limit. Stopping.")
-            return
-        }
-
-        // SAFETY 2: Stop if we've had 3 pages in a row with NO new items
-        if (consecutiveEmptyPages >= 3) {
-            Log.d(TAG, "No new items found for 3 pages. Stopping.")
-            return
-        }
+        // Safety Checks
+        if (visitedCursors.size > 200) return
+        if (consecutiveEmptyPages >= 3) return
 
         Log.d(TAG, "Fetching Profile JSON: $url")
+
+        // 1. Fetch
         val jsonStr = loadResponseWithHeaders(url, cookie, headers)
 
         try {
             var itemsAddedThisPage = 0
 
-            // Parse Media items
+            // 2. Parse (Using your existing String parsing logic)
             var currentJson = jsonStr
             while (currentJson.contains("responsive_url")) {
                 val urlStart = currentJson.indexOf("responsive_url") + 16
                 var dlu = currentJson.substring(urlStart).substringAfter('"').substringBefore('"')
                 dlu = "https://$dlu"
 
-                // Only add if UNIQUE
                 if (!mMediaUrls.contains(dlu)) {
                     mMediaUrls.add(dlu)
                     itemsAddedThisPage++
 
-                    // Set thumbnail if this is the very first item found
                     if (mMediaUrls.size == 1) {
                         mThumbnailFilename = if (dlu.contains(".mp4")) "video" else "image"
                     }
                 }
-
                 currentJson = currentJson.substring(urlStart + 10)
             }
 
             Log.d(TAG, "Items found this page: $itemsAddedThisPage. Total: ${mMediaUrls.size}")
 
-            // Update empty page counter
+            // 3. TRIGGER CALLBACK (Report new count to UI)
+            if (itemsAddedThisPage > 0) {
+                onProgress(mMediaUrls.size)
+            }
+
+            // 4. Recursion Logic
             val nextEmptyCount = if (itemsAddedThisPage == 0) consecutiveEmptyPages + 1 else 0
 
-            // Check for next cursor
             if (jsonStr.contains("next_cursor")) {
                 val cursorStart = jsonStr.indexOf("next_cursor")
                 val cursorVal = jsonStr.substring(cursorStart).substringAfter('"').substringAfter('"').substringBefore('"')
 
-                // SAFETY 3: Stop if cursor is empty, null, or ALREADY VISITED
                 if (cursorVal.isNotEmpty() && cursorVal != "null" && !visitedCursors.contains(cursorVal)) {
                     visitedCursors.add(cursorVal)
 
-                    // VSCO cursors contain "+" and "=" which break the URL if not encoded.
+                    // CRITICAL: Encode cursor to fix "28 items" bug
                     val encodedCursor = URLEncoder.encode(cursorVal, "UTF-8")
 
-                    // Reconstruct URL for next page
                     val baseUrl = url.substringBefore("&cursor=")
                     val newUrl = "$baseUrl&cursor=$encodedCursor"
 
-                    val nextEmptyCount = if (itemsAddedThisPage == 0) consecutiveEmptyPages + 1 else 0
-
-                    // Recurse with updated counters
-                    recursiveFetch(newUrl, cookie, headers, visitedCursors, nextEmptyCount)
-                } else {
-                    Log.d(TAG, "Cursor invalid or already visited. Stopping.")
+                    recursiveFetch(newUrl, cookie, headers, visitedCursors, nextEmptyCount, onProgress)
                 }
-            } else {
-                Log.d(TAG, "No next_cursor found. Stopping.")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Profile parse error", e)

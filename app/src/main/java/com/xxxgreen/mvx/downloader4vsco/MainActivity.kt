@@ -1,6 +1,7 @@
 package com.xxxgreen.mvx.downloader4vsco
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.*
@@ -56,20 +57,33 @@ class MainActivity : AppCompatActivity() {
 
     private var lastLoadedUrl = ""
 
+    private val inputHandler = Handler(Looper.getMainLooper())
+    private val inputRunnable = Runnable {
+        val text = binding.etMainInput.text.toString()
+        // Only trigger if it actually looks like a VSCO URL to prevent random searches
+        if (VALID_INPUT_REGEX.matcher(text).find()) {
+            handleInput(text)
+        }
+    }
+
     private val textWatcher = object : TextWatcher {
         override fun afterTextChanged(s: Editable?) {
             binding.btnClear.visibility = if (s.isNullOrEmpty()) View.GONE else View.VISIBLE
+
+            // 1. Cancel previous pending search (Debounce)
+            inputHandler.removeCallbacks(inputRunnable)
+
+            if (s.isNullOrEmpty()) {
+                updateUI(UIState.EMPTY)
+            } else {
+                // 2. Wait 1 second. If user stops typing, trigger load.
+                // This replaces the faulty "lengthDiff" logic.
+                inputHandler.postDelayed(inputRunnable, 1000)
+            }
         }
         override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-
         override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-            val lengthDiff = count - before
-            // Simplified Logic: We no longer need to check !isShared here
-            if (lengthDiff > 1) {
-                handleInput(s.toString())
-            } else if (s.isNullOrEmpty()) {
-                updateUI(UIState.EMPTY)
-            }
+            // Logic moved to afterTextChanged for safer handling
         }
     }
 
@@ -156,15 +170,38 @@ class MainActivity : AppCompatActivity() {
 
     // --- VIEW BINDING SETUP ---
 
+    @SuppressLint("ClickableViewAccessibility")
     private fun setupListeners() {
+        // enter button listener
+        binding.etMainInput.setOnEditorActionListener { v, actionId, event ->
+            val text = v.text.toString()
+            handleInput(text)
+            true
+        }
+
+        // Text Watcher
+        binding.etMainInput.addTextChangedListener(textWatcher)
+
         // Paste Button
+        binding.btnPaste.setOnTouchListener { v, event ->
+            when (event.action) {
+                // When pressed: Turn Gold
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    (v as? android.widget.ImageView)?.setColorFilter(Color.parseColor("#FFD700"))
+                }
+                // When released or cancelled: Revert to original
+                android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
+                    (v as? android.widget.ImageView)?.clearColorFilter()
+                }
+            }
+            false // Return false so the standard OnClickListener still fires!
+        }
         binding.btnPaste.setOnClickListener {
             val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             val clip = clipboard.primaryClip
             if (clip != null && clip.itemCount > 0) {
                 val text = clip.getItemAt(0).text.toString()
                 binding.etMainInput.setText(text)
-                handleInput(text)
             }
         }
 
@@ -181,9 +218,6 @@ class MainActivity : AppCompatActivity() {
                 startDownloadService()
             }
         }
-
-        // Text Watcher
-        binding.etMainInput.addTextChangedListener(textWatcher)
     }
 
     private fun setupToolbarMenu() {
@@ -242,44 +276,75 @@ class MainActivity : AppCompatActivity() {
     // --- LOGIC & UI UPDATES ---
 
     private fun handleInput(rawInput: String) {
-        // 1. CANCEL ANY RUNNING FETCH (Profile OR Single Post)
+        // 1. CANCEL ANY RUNNING FETCH
         fetchJob?.cancel()
 
+        // 2. HIDE KEYBOARD
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+        imm.hideSoftInputFromWindow(binding.etMainInput.windowToken, 0)
+        binding.etMainInput.clearFocus()
+
+        // 3. FAST VALIDATION (Do this immediately)
         var input = rawInput.trim()
         if (input.contains("http://")) input = input.replace("http://", "https://")
         if (input.endsWith("/")) input = input.substring(0, input.length - 1)
 
         if (!VALID_INPUT_REGEX.matcher(input).find()) return
 
-        var url = "https://"
-        if (input.contains("vs.co")) url += input.substring(input.indexOf("vs.co"))
-        else if (input.contains("vsco.co")) url += input.substring(input.indexOf("vsco.co"))
-        else url = input
+        // 4. INSTANT UI FEEDBACK (The Fix)
+        // Show the spinner NOW. Do not wait for the keyboard.
+        updateUI(UIState.LOADING)
 
-        // Note: This resets the list. If a download is currently RUNNING,
-        // this will stop it from downloading further items.
-        VscoLoader.resetVars()
+        // 5. DELAYED PROCESSING
+        // We still wait 300ms to start the heavy network/webview work.
+        // This prevents the "Layout Thrashing" glitch, but the user
+        // already sees the "Loading" spinner, so it feels instant.
+        Handler(Looper.getMainLooper()).postDelayed({
+            var url = "https://"
+            if (input.contains("vs.co")) url += input.substring(input.indexOf("vs.co"))
+            else if (input.contains("vsco.co")) url += input.substring(input.indexOf("vsco.co"))
+            else url = input
 
-        if (url.contains("/collection")) {
-            VscoLoader.isCollection = true
-            val username = VscoLoader.extractUsernameFromUrl(url)
-            if (username.isNotEmpty()) VscoLoader.mTitle = username
-            url += "/1"
-            loadInWebView(url)
-        }
-        else if (!url.contains("/media") && !url.contains("/video") && !url.contains("vs.co")) {
-            VscoLoader.isProfile = true
-            val username = VscoLoader.extractUsernameFromUrl(url)
-            if (username.isNotEmpty()) VscoLoader.mTitle = username
-            url += "/gallery"
-            loadInWebView(url)
-        }
-        else if (input.contains("vs.co")) {
-            loadInWebView(url)
-        }
-        else {
-            loadMediaData(url)
-        }
+            val prefs = getSharedPreferences("com.xxxgreen.mvx.prefs", Context.MODE_PRIVATE)
+            val isGold = prefs.getBoolean("IS_GOLD", false)
+
+            VscoLoader.resetVars()
+
+            // Collection
+            if (url.contains("/collection")) {
+                if (!isGold) {
+                    binding.etMainInput.setText("")
+                    showUpgradeDialog()
+                    updateUI(UIState.EMPTY) // Reset if failed
+                    return@postDelayed
+                }
+                VscoLoader.isCollection = true
+                val username = VscoLoader.extractUsernameFromUrl(url)
+                if (username.isNotEmpty()) VscoLoader.mTitle = username
+                url += "/1"
+                loadInWebView(url)
+            }
+            // Profile
+            else if (!url.contains("/media") && !url.contains("/video") && !url.contains("vs.co")) {
+                if (!isGold) {
+                    binding.etMainInput.setText("")
+                    showUpgradeDialog()
+                    updateUI(UIState.EMPTY) // Reset if failed
+                    return@postDelayed
+                }
+                VscoLoader.isProfile = true
+                val username = VscoLoader.extractUsernameFromUrl(url)
+                if (username.isNotEmpty()) VscoLoader.mTitle = username
+                url += "/gallery"
+                loadInWebView(url)
+            }
+            // Shortlink / Media
+            else if (input.contains("vs.co")) {
+                loadInWebView(url)
+            } else {
+                loadMediaData(url)
+            }
+        }, 300)
     }
 
     private fun loadInWebView(url: String) {
@@ -323,27 +388,58 @@ class MainActivity : AppCompatActivity() {
                 if (url.contains("medias/profile") || url.contains("medias/videos")) {
                     Log.d("MainActivity", "Intercepted API: $url")
 
+                    val prefs = getSharedPreferences("com.xxxgreen.mvx.prefs", Context.MODE_PRIVATE)
+                    val isGold = prefs.getBoolean("IS_GOLD", false)
+
+                    if (!isGold) {
+                        Log.d("MainActivity", "Blocked Profile Download (Non-Gold)")
+                        // Stop Loading and Show Dialog
+                        runOnUiThread {
+                            updateUI(UIState.EMPTY)
+                            showUpgradeDialog()
+                        }
+                        // Return without starting the fetch job
+                        return super.shouldInterceptRequest(view, request)
+                    }
+
                     val headers = request?.requestHeaders ?: emptyMap()
                     val cookie = CookieManager.getInstance().getCookie(url) ?: ""
 
                     fetchJob = CoroutineScope(Dispatchers.IO).launch {
                         try {
-                            VscoLoader.processProfile(url, cookie, headers)
+                            VscoLoader.processProfile(url, cookie, headers) { count ->
+
+                                runOnUiThread {
+                                    binding.tvTitle.text = "Found $count Items..."
+
+                                    // SHOW UI (Without Button)
+                                    if (binding.previewCard.visibility != View.VISIBLE) {
+                                        binding.previewCard.fadeIn()
+                                        binding.bottomControlCard.fadeIn()
+
+                                        // CRITICAL FIX: Explicitly hide the button while loading
+                                        binding.btnAction.visibility = View.INVISIBLE
+
+                                        binding.layoutLoading.fadeOut()
+                                    }
+
+                                    if (count > 0 && isValidContextForGlide(this@MainActivity)) {
+                                        Glide.with(this@MainActivity)
+                                            .load(VscoLoader.mMediaUrls[0])
+                                            .centerCrop()
+                                            .into(binding.ivPreview)
+                                    }
+                                }
+                            }
 
                             if (isActive) {
                                 withContext(Dispatchers.Main) {
                                     if (VscoLoader.mMediaUrls.isNotEmpty()) {
                                         binding.tvTitle.text = "${VscoLoader.mMediaUrls.size} Items Found"
-
-                                        if (isValidContextForGlide(this@MainActivity)) {
-                                            Glide.with(this@MainActivity)
-                                                .load(VscoLoader.mMediaUrls[0])
-                                                .centerCrop()
-                                                .into(binding.ivPreview)
-                                        }
+                                        // This function will finally show the button!
                                         updateUI(UIState.PREVIEW)
                                     } else {
-                                        Toast.makeText(this@MainActivity, "No items found in profile", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(this@MainActivity, "No items found", Toast.LENGTH_SHORT).show()
                                         updateUI(UIState.EMPTY)
                                     }
                                 }
@@ -351,9 +447,7 @@ class MainActivity : AppCompatActivity() {
                         } catch (e: Exception) {
                             Log.e("MainActivity", "Profile fetch failed", e)
                             if (isActive) {
-                                withContext(Dispatchers.Main) {
-                                    updateUI(UIState.EMPTY)
-                                }
+                                withContext(Dispatchers.Main) { updateUI(UIState.EMPTY) }
                             }
                         }
                     }
@@ -448,45 +542,60 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateUI(state: UIState) {
+        Log.d("MainActivity", "Updating UI to $state")
+
         currentState = state
+
         when (state) {
             UIState.EMPTY -> {
-                binding.layoutLoading.visibility = View.GONE
-                binding.previewCard.visibility = View.GONE
-                binding.bottomControlCard.visibility = View.GONE
+                binding.layoutLoading.fadeOut()
+                binding.previewCard.fadeOut()
+                binding.bottomControlCard.fadeOut()
             }
             UIState.LOADING -> {
-                binding.layoutLoading.visibility = View.VISIBLE
-                binding.previewCard.visibility = View.GONE
-                binding.bottomControlCard.visibility = View.GONE
+                binding.layoutLoading.fadeIn()
+                binding.previewCard.fadeOut()
+                //binding.bottomControlCard.fadeOut()
             }
             UIState.PREVIEW -> {
-                binding.layoutLoading.visibility = View.GONE
-                binding.previewCard.visibility = View.VISIBLE
-                binding.overlayDownloading.visibility = View.GONE
-                binding.bottomControlCard.visibility = View.VISIBLE
+                binding.layoutLoading.fadeOut()
 
-                binding.btnAction.visibility = View.VISIBLE
+                binding.previewCard.fadeIn()
+                binding.bottomControlCard.fadeIn()
+
+                // Ensure overlay is hidden
+                binding.overlayDownloading.fadeOut()
+
+                // Setup Button
                 binding.btnAction.setImageResource(R.drawable.ic_download)
                 binding.btnAction.isEnabled = true
+                binding.btnAction.fadeIn()
             }
             UIState.DOWNLOADING -> {
-                binding.layoutLoading.visibility = View.GONE
-                binding.previewCard.visibility = View.VISIBLE
-                binding.overlayDownloading.visibility = View.VISIBLE
-                binding.bottomControlCard.visibility = View.VISIBLE
+                binding.layoutLoading.fadeOut()
 
-                binding.btnAction.visibility = View.INVISIBLE
+                // Keep preview and controls visible
+                binding.previewCard.fadeIn()
+                binding.bottomControlCard.fadeIn()
+
+                // Show Overlay
+                binding.overlayDownloading.fadeIn()
+
+                // Hide Action Button (Invisible to keep layout)
+                binding.btnAction.fadeOut(targetVisibility = View.INVISIBLE)
             }
             UIState.FINISHED -> {
-                binding.layoutLoading.visibility = View.GONE
-                binding.previewCard.visibility = View.VISIBLE
-                binding.overlayDownloading.visibility = View.GONE
-                binding.bottomControlCard.visibility = View.VISIBLE
+                binding.layoutLoading.fadeOut()
+                binding.previewCard.fadeIn()
+                binding.bottomControlCard.fadeIn()
 
-                binding.btnAction.visibility = View.VISIBLE
+                // Hide Overlay
+                binding.overlayDownloading.fadeOut()
+
+                // Show Checkmark
                 binding.btnAction.setImageResource(R.drawable.ic_check)
                 binding.btnAction.isEnabled = false
+                binding.btnAction.fadeIn()
             }
         }
     }
@@ -651,8 +760,6 @@ class MainActivity : AppCompatActivity() {
 
                 VscoLoader.isShared = true
 
-                // 3. FIX: DETACH LISTENER -> SET TEXT -> RE-ATTACH
-                // This ensures the TextWatcher logic DOES NOT FIRE for this specific update
                 binding.etMainInput.removeTextChangedListener(textWatcher)
                 binding.etMainInput.setText(sharedText)
                 binding.etMainInput.addTextChangedListener(textWatcher)
@@ -669,6 +776,42 @@ class MainActivity : AppCompatActivity() {
                 requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 101)
             }
         }
+    }
+
+    // --- ANIMATION HELPERS ---
+
+    private fun View.fadeIn(duration: Long = 300) {
+        // If already visible and opaque, do nothing
+        if (visibility == View.VISIBLE && alpha == 1f) return
+
+        // Cancel any ongoing animation
+        animate().cancel()
+
+        // Prepare view
+        alpha = 0f
+        visibility = View.VISIBLE
+
+        // Animate
+        animate()
+            .alpha(1f)
+            .setDuration(duration)
+            .withEndAction(null) // Clear any old end actions
+            .start()
+    }
+
+    private fun View.fadeOut(targetVisibility: Int = View.GONE, duration: Long = 150) {
+        // If already in the target state, do nothing
+        if (visibility == targetVisibility && alpha == 0f) return
+
+        animate().cancel()
+
+        animate()
+            .alpha(0f)
+            .setDuration(duration)
+            .withEndAction {
+                visibility = targetVisibility
+            }
+            .start()
     }
 
     override fun onDestroy() {
