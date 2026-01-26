@@ -37,7 +37,7 @@ import java.util.regex.Pattern
 class MainActivity : AppCompatActivity() {
     private val bannerIdTest = "ca-app-pub-3940256099942544/6300978111" // Test ID
     private val bannerIdReal = "ca-app-pub-7417392682402637/1939309490" // Real ID
-    private val bannerId = bannerIdTest
+    private val bannerId = bannerIdReal
     private lateinit var firebaseAnalytics: FirebaseAnalytics
 
     // 1. Declare Binding Object
@@ -115,8 +115,8 @@ class MainActivity : AppCompatActivity() {
             Log.d("MainActivity", "Download finished broadcast received")
             updateUI(UIState.FINISHED)
 
-            // Check if this session was initiated via Share
-            if (VscoLoader.isShared) {
+            // Check if this session was single & initiated via Share
+            if (VscoLoader.isShared && !VscoLoader.isProfile && !VscoLoader.isCollection) {
                 Toast.makeText(context, "Saved!", Toast.LENGTH_LONG).show()
 
                 // Delay slightly to let the user see the success message, then close
@@ -497,7 +497,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadInWebView(url: String) {
-        updateUI(UIState.LOADING)
+        //updateUI(UIState.LOADING)
         binding.webView.loadUrl(url)
         // logic continues in setupWebView()
     }
@@ -516,7 +516,7 @@ class MainActivity : AppCompatActivity() {
         lastLoadedMediaId = mediaId
 
         // Proceed as normal
-        updateUI(UIState.LOADING)
+        //updateUI(UIState.LOADING)
 
         loadMediaData(resolvedUrl)
     }
@@ -654,7 +654,7 @@ class MainActivity : AppCompatActivity() {
         // Cancel any previous jobs (important for rapid pasting)
         fetchJob?.cancel()
 
-        updateUI(UIState.LOADING)
+        //updateUI(UIState.LOADING)
 
         fetchJob = CoroutineScope(Dispatchers.IO).launch {
             try {
@@ -732,7 +732,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateUI(state: UIState) {
-        Log.d("MainActivity", "Updating UI to $state")
+        Log.d("MainActivity", "UpdateUI to $state")
         currentState = state
 
         // This handles ALL animations and measurements automatically
