@@ -1,5 +1,6 @@
 package com.xxxgreen.mvx.downloader4vsco
 
+// IMPORT THE GENERATED BINDING CLASSES
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
@@ -18,24 +19,19 @@ import android.text.TextWatcher
 import android.util.Log
 import android.view.View
 import android.webkit.*
+import android.widget.ProgressBar
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.android.billingclient.api.*
 import com.bumptech.glide.Glide
 import com.google.android.gms.ads.*
-// IMPORT THE GENERATED BINDING CLASSES
 import com.xxxgreen.mvx.downloader4vsco.databinding.ActivityMainBinding
 import com.xxxgreen.mvx.downloader4vsco.databinding.DialogUpgradeBinding
 import kotlinx.coroutines.*
 import org.jsoup.Jsoup
 import java.util.regex.Pattern
-import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
-import android.webkit.WebViewClient
-import android.widget.ProgressBar
-import android.widget.TextView
-import com.xxxgreen.mvx.downloader4vsco.render.animal.GhostsEyeLoadingRenderer
 
 class MainActivity : AppCompatActivity() {
     private val bannerIdTest = "ca-app-pub-3940256099942544/6300978111" // Test ID
@@ -101,12 +97,10 @@ class MainActivity : AppCompatActivity() {
 
             if (total > 0) {
                 // Update determinate progress bar
-                /*
                 val progressBar = findViewById<ProgressBar>(R.id.pbOverlay)
                 progressBar.isIndeterminate = false
                 progressBar.max = total
                 progressBar.progress = completed
-                 */
 
                 val tvProgress = findViewById<TextView>(R.id.tvOverlayProgress)
                 tvProgress.text = "$completed / $total"
@@ -171,9 +165,6 @@ class MainActivity : AppCompatActivity() {
         // Setup Toolbar
         updateUpgradeIcon(isGold)
         setupToolbarMenu()
-
-        // Custom Progress Bar
-        setupCustomLoader()
 
         // Setup Webview
         setupWebView()
@@ -304,15 +295,14 @@ class MainActivity : AppCompatActivity() {
             val powerManager = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
             if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
                 try {
-                    Toast.makeText(this, "Please allow 'Unrestricted' battery usage", Toast.LENGTH_LONG).show()
                     val intent = Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
                     intent.data = Uri.parse("package:$packageName")
                     startActivity(intent)
                 } catch (e: Exception) {
-                    Toast.makeText(this, "Could not open battery settings", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Could not open background settings", Toast.LENGTH_SHORT).show()
                 }
             } else {
-                Toast.makeText(this, "Background setup complete!", Toast.LENGTH_SHORT).show()
+                //Toast.makeText(this, "Background setup complete!", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -495,6 +485,35 @@ class MainActivity : AppCompatActivity() {
         // logic continues in setupWebView()
     }
 
+    private var lastLoadedMediaId: String? = null
+
+    fun onShortlinkResolved(resolvedUrl: String) {
+        val mediaId = extractMediaId(resolvedUrl)
+
+        // GUARD CLAUSE: If we just loaded this ID, stop here.
+        if (mediaId != null && mediaId == lastLoadedMediaId) {
+            Log.d("App", "Duplicate ID detected ($mediaId), skipping UI reset.")
+            return
+        }
+
+        lastLoadedMediaId = mediaId
+
+        // Proceed as normal
+        updateUI(UIState.LOADING)
+
+        loadMediaData(resolvedUrl)
+    }
+
+    // Helper function to grab the ID from the VSCO URL
+    private fun extractMediaId(url: String): String? {
+        // URL looks like: .../media/567c1ce3...?share=...
+        if (!url.contains("/media/")) return null
+
+        return url.substringAfter("/media/") // Get everything after /media/
+            .substringBefore("?")      // Stop at the query params
+            .substringBefore("/")      // Stop if there are trailing slashes
+    }
+
     private fun setupWebView() {
         binding.webView.settings.javaScriptEnabled = true
         binding.webView.settings.domStorageEnabled = true
@@ -519,7 +538,7 @@ class MainActivity : AppCompatActivity() {
 
                     if (url.contains("/media/") || url.contains("/video/")) {
                         Log.d("MainActivity", "Shortlink resolved to Media: $url")
-                        loadMediaData(url)
+                        onShortlinkResolved(url)
                     }
                 }
             }
@@ -554,6 +573,7 @@ class MainActivity : AppCompatActivity() {
                                 runOnUiThread {
                                     binding.tvTitle.text = "Found $count Items..."
 
+                                    /*
                                     // SHOW UI (Without Button)
                                     if (binding.previewCard.visibility != View.VISIBLE) {
                                         binding.previewCard.fadeIn()
@@ -564,6 +584,7 @@ class MainActivity : AppCompatActivity() {
 
                                         binding.layoutLoading.fadeOut()
                                     }
+                                    */
 
                                     if (count > 0 && isValidContextForGlide(this@MainActivity)) {
                                         Glide.with(this@MainActivity)
@@ -608,23 +629,6 @@ class MainActivity : AppCompatActivity() {
             return !context.isDestroyed && !context.isFinishing
         }
         return true
-    }
-
-    private fun setupCustomLoader() {
-        // Example 1: Collision Renderer (Two balls hitting each other)
-        val renderer = GhostsEyeLoadingRenderer(this)
-
-        // Example 2: Electric Fan (Uncomment to use)
-        // val renderer = com.dinuscxj.loadingdrawable.render.shapechange.CoolWaitLoadingRenderer(this)
-
-        // Example 3: Gear (Uncomment to use)
-        // val renderer = com.dinuscxj.loadingdrawable.render.shape.GearLoadingRenderer(this)
-
-        // Customization (Optional)
-        // You can change colors, widths, etc. depending on the renderer
-        // renderer.setColor(getColor(R.color.color_accent))
-
-        binding.customLoader.setLoadingRenderer(renderer)
     }
 
     private fun loadMediaData(url: String) {
@@ -673,11 +677,17 @@ class MainActivity : AppCompatActivity() {
                                     .centerCrop()
                                     .into(binding.ivPreview)
                             }
-                            updateUI(UIState.PREVIEW)
 
+                            // --- FIX START ---
+                            // Prevent the "Double Update" bug.
+                            // If we are auto-downloading, skip PREVIEW and go straight to DOWNLOADING.
                             if (VscoLoader.isShared) {
-                                startDownloadService()
+                                startDownloadService() // This triggers updateUI(DOWNLOADING)
+                            } else {
+                                updateUI(UIState.PREVIEW) // This triggers updateUI(PREVIEW)
                             }
+                            // --- FIX END ---
+
                         } else {
                             Toast.makeText(this@MainActivity, "No media found", Toast.LENGTH_SHORT).show()
                             updateUI(UIState.EMPTY)
@@ -704,63 +714,65 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateUI(state: UIState) {
         Log.d("MainActivity", "Updating UI to $state")
-
         currentState = state
 
-        // 1. DEFAULT: Enable inputs (Reset to normal for EMPTY, PREVIEW, FINISHED)
+        // This handles ALL animations and measurements automatically
+        androidx.transition.TransitionManager.beginDelayedTransition(binding.root)
+
+        // Reset Inputs default state
         binding.etMainInput.isEnabled = true
         binding.btnPaste.isEnabled = true
         binding.btnPaste.alpha = 1.0f
 
         when (state) {
             UIState.EMPTY -> {
-                binding.layoutLoading.fadeOut()
-                binding.previewCard.fadeOut()
-                binding.bottomControlCard.fadeOut()
+                binding.layoutLoading.visibility = View.GONE
+                binding.previewCard.visibility = View.GONE
+                binding.bottomControlCard.visibility = View.GONE
                 binding.overlayDownloading.visibility = View.GONE
             }
             UIState.LOADING -> {
-                binding.layoutLoading.fadeIn()
-                binding.previewCard.fadeOut()
-                binding.bottomControlCard.fadeOut()
+                binding.layoutLoading.visibility = View.VISIBLE
+                binding.previewCard.visibility = View.GONE
+                binding.bottomControlCard.visibility = View.GONE
                 binding.overlayDownloading.visibility = View.GONE
 
-                // Disable inputs while scraping/fetching data
                 binding.etMainInput.isEnabled = false
                 binding.btnPaste.isEnabled = false
                 binding.btnPaste.alpha = 0.3f
             }
             UIState.PREVIEW -> {
-                binding.layoutLoading.fadeOut()
-                binding.previewCard.fadeIn()
-                binding.bottomControlCard.fadeIn()
-                binding.overlayDownloading.fadeOut()
+                binding.layoutLoading.visibility = View.GONE
+                binding.previewCard.visibility = View.VISIBLE
+                binding.bottomControlCard.visibility = View.VISIBLE
+                binding.overlayDownloading.visibility = View.GONE
 
                 binding.btnAction.setImageResource(R.drawable.ic_download)
                 binding.btnAction.isEnabled = true
-                binding.btnAction.fadeIn()
+                binding.btnAction.visibility = View.VISIBLE
             }
             UIState.DOWNLOADING -> {
-                binding.layoutLoading.fadeOut()
-                binding.previewCard.fadeIn()
-                binding.bottomControlCard.fadeIn()
-                binding.overlayDownloading.fadeIn()
-                binding.btnAction.fadeOut(targetVisibility = View.INVISIBLE)
+                binding.layoutLoading.visibility = View.GONE
+                binding.previewCard.visibility = View.VISIBLE
+                binding.bottomControlCard.visibility = View.VISIBLE
+                binding.overlayDownloading.visibility = View.VISIBLE
 
-                // --- disable inputs during download
+                // Hide action button cleanly
+                binding.btnAction.visibility = View.INVISIBLE
+
                 binding.etMainInput.isEnabled = false
                 binding.btnPaste.isEnabled = false
                 binding.btnPaste.alpha = 0.3f
             }
             UIState.FINISHED -> {
-                binding.layoutLoading.fadeOut()
-                binding.previewCard.fadeIn()
-                binding.bottomControlCard.fadeIn()
-                binding.overlayDownloading.fadeOut()
+                binding.layoutLoading.visibility = View.GONE
+                binding.previewCard.visibility = View.VISIBLE
+                binding.bottomControlCard.visibility = View.VISIBLE
+                binding.overlayDownloading.visibility = View.GONE
 
                 binding.btnAction.setImageResource(R.drawable.ic_check)
                 binding.btnAction.isEnabled = false
-                binding.btnAction.fadeIn()
+                binding.btnAction.visibility = View.VISIBLE
             }
         }
     }

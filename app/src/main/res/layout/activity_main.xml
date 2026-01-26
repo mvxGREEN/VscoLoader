@@ -126,7 +126,7 @@
 
         <FrameLayout
             android:layout_width="match_parent"
-            android:layout_height="match_parent">
+            android:layout_height="320dp">
 
             <ImageView
                 android:id="@+id/ivPreview"
@@ -149,26 +149,16 @@
                     android:gravity="center"
                     android:orientation="vertical">
 
-                    <!-- TODO remove?
-                        <ProgressBar
+                    <ProgressBar
                         android:id="@+id/pbOverlay"
                         style="?android:attr/progressBarStyleHorizontal"
-                        android:layout_width="150dp"
+                        android:layout_width="180dp"
                         android:layout_height="wrap_content"
                         android:elevation="8dp"
                         android:indeterminate="false"
                         android:max="100"
                         android:progress="0"
                         android:progressTint="@color/color_accent" />
-                    -->
-
-                    <com.xxxgreen.mvx.downloader4vsco.LoadingView
-                        android:id="@+id/customLoader"
-                        android:elevation="8dp"
-                        android:layout_width="150dp"
-                        android:layout_height="150dp"
-                        android:background="@color/text_primary"
-                        app:loading_renderer="GhostsEyeLoadingRenderer"/>
 
                     <TextView
                         android:id="@+id/tvOverlayProgress"
