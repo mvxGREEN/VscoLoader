@@ -27,6 +27,7 @@ import androidx.core.content.ContextCompat
 import com.android.billingclient.api.*
 import com.bumptech.glide.Glide
 import com.google.android.gms.ads.*
+import com.google.firebase.analytics.FirebaseAnalytics
 import com.xxxgreen.mvx.downloader4vsco.databinding.ActivityMainBinding
 import com.xxxgreen.mvx.downloader4vsco.databinding.DialogUpgradeBinding
 import kotlinx.coroutines.*
@@ -37,6 +38,7 @@ class MainActivity : AppCompatActivity() {
     private val bannerIdTest = "ca-app-pub-3940256099942544/6300978111" // Test ID
     private val bannerIdReal = "ca-app-pub-7417392682402637/1939309490" // Real ID
     private val bannerId = bannerIdTest
+    private lateinit var firebaseAnalytics: FirebaseAnalytics
 
     // 1. Declare Binding Object
     private lateinit var binding: ActivityMainBinding
@@ -133,6 +135,9 @@ class MainActivity : AppCompatActivity() {
         // 2. Inflate Layout via Binding
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        // 2. Initialize Firebase
+        firebaseAnalytics = FirebaseAnalytics.getInstance(this)
 
         // --- 1. INITIALIZE PERMISSION LAUNCHER ---
         requestNotificationLauncher = registerForActivityResult(
@@ -381,6 +386,15 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun logInputEvent(eventName: String) {
+        val inputValue = binding.etMainInput.text.toString()
+        val bundle = Bundle().apply {
+            putString("input_value", inputValue)
+        }
+        firebaseAnalytics.logEvent(eventName, bundle)
+        Log.d("Analytics", "Logged event: $eventName with value: $inputValue")
+    }
+
     // --- UPGRADE DIALOG (WITH BINDING) ---
 
     private fun showUpgradeDialog() {
@@ -408,6 +422,9 @@ class MainActivity : AppCompatActivity() {
     // --- LOGIC & UI UPDATES ---
 
     private fun handleInput(rawInput: String) {
+        // 1. LOG ANALYTICS (Add this line)
+        logInputEvent("handle_input")
+
         // 1. CANCEL ANY RUNNING FETCH
         fetchJob?.cancel()
 
@@ -526,8 +543,6 @@ class MainActivity : AppCompatActivity() {
                 super.onPageFinished(view, url)
 
                 // 5. FIX: PREVENT DUPLICATE REDIRECTS
-                // WebViews often fire onPageFinished multiple times for redirects.
-                // We ignore if it's the exact same URL we just processed.
                 if (url != null && url != lastLoadedUrl) {
                     lastLoadedUrl = url
 
@@ -538,6 +553,10 @@ class MainActivity : AppCompatActivity() {
 
                     if (url.contains("/media/") || url.contains("/video/")) {
                         Log.d("MainActivity", "Shortlink resolved to Media: $url")
+
+                        // --- CHANGED THIS LINE ---
+                        // Old: loadMediaData(url)
+                        // New: Calls your smart function with the duplicate check
                         onShortlinkResolved(url)
                     }
                 }
@@ -773,6 +792,9 @@ class MainActivity : AppCompatActivity() {
                 binding.btnAction.setImageResource(R.drawable.ic_check)
                 binding.btnAction.isEnabled = false
                 binding.btnAction.visibility = View.VISIBLE
+
+                // 2. LOG ANALYTICS (Add this line)
+                logInputEvent("download_finished")
             }
         }
     }

@@ -104,9 +104,18 @@ object VscoLoader {
 
         val fileName = if (url.contains(".mp4")) "$mTitle.mp4" else "$mTitle.jpg"
 
+        // LOGIC CHANGE:
+        // If downloading a Profile or Collection, auto-hide the notification when done.
+        // Otherwise (Single link), keep it visible so the user can click to open.
+        val visibility = if (isProfile || isCollection) {
+            DownloadManager.Request.VISIBILITY_VISIBLE // Disappears after completion
+        } else {
+            DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED // Stays in shade
+        }
+
         val request = DownloadManager.Request(Uri.parse(url))
             .setTitle(fileName)
-            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            .setNotificationVisibility(visibility) // <--- Apply the variable here
             .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOCUMENTS, fileName)
             .setAllowedOverMetered(true)
             .setAllowedOverRoaming(true)
