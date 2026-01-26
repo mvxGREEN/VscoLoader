@@ -29,6 +29,7 @@ import com.bumptech.glide.Glide
 import com.google.android.gms.ads.*
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.xxxgreen.mvx.downloader4vsco.databinding.ActivityMainBinding
+import com.xxxgreen.mvx.downloader4vsco.databinding.DialogRateBinding
 import com.xxxgreen.mvx.downloader4vsco.databinding.DialogUpgradeBinding
 import kotlinx.coroutines.*
 import org.jsoup.Jsoup
@@ -37,7 +38,7 @@ import java.util.regex.Pattern
 class MainActivity : AppCompatActivity() {
     private val bannerIdTest = "ca-app-pub-3940256099942544/6300978111" // Test ID
     private val bannerIdReal = "ca-app-pub-7417392682402637/1939309490" // Real ID
-    private val bannerId = bannerIdReal
+    private val bannerId = bannerIdTest
     private lateinit var firebaseAnalytics: FirebaseAnalytics
 
     // 1. Declare Binding Object
@@ -119,9 +120,12 @@ class MainActivity : AppCompatActivity() {
             if (VscoLoader.isShared && !VscoLoader.isProfile && !VscoLoader.isCollection) {
                 Toast.makeText(context, "Saved!", Toast.LENGTH_LONG).show()
 
+                // reset shared flag
+                VscoLoader.isShared = false
+
                 // Delay slightly to let the user see the success message, then close
                 Handler(Looper.getMainLooper()).postDelayed({
-                    finishAndRemoveTask() // Closes the app and removes from recents (optional) or just finish()
+                    finish() // Closes the app and removes from recents (optional) or just finish()
                 }, 1000)
             } else {
                 Toast.makeText(context, "Saved to Documents!", Toast.LENGTH_SHORT).show()
@@ -131,6 +135,10 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // NUKE old state
+        VscoLoader.resetVars()
+        VscoLoader.isShared = false
 
         // 2. Inflate Layout via Binding
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -397,6 +405,62 @@ class MainActivity : AppCompatActivity() {
 
     // --- UPGRADE DIALOG (WITH BINDING) ---
 
+    private fun incrementSuccessfulRuns() {
+        val prefs = getSharedPreferences("com.xxxgreen.mvx.prefs", Context.MODE_PRIVATE)
+
+        // 1. Increment Counter
+        val currentCount = prefs.getInt("SUCCESS_RUNS", 0) + 1
+        prefs.edit().putInt("SUCCESS_RUNS", currentCount).apply()
+
+        Log.d("MainActivity", "Successful Runs: $currentCount")
+
+        // 2. Check if multiple of 6
+        if (currentCount > 0 && currentCount % 6 == 0) {
+            val cycle = currentCount / 6
+
+            // Odd cycles (1, 3, 5... -> runs 6, 18, 30): Show Upgrade
+            // Even cycles (2, 4, 6... -> runs 12, 24, 36): Show Rate
+            if (cycle % 2 != 0) {
+                // Check if user is already Gold before annoying them with Upgrade dialog
+                val isGold = prefs.getBoolean("IS_GOLD", false)
+                if (!isGold) {
+                    showUpgradeDialog()
+                }
+            } else {
+                showRateDialog()
+            }
+        }
+    }
+
+    private fun showRateDialog() {
+        // Inflate the Rate Dialog layout
+        val rateBinding = DialogRateBinding.inflate(layoutInflater)
+
+        val builder = AlertDialog.Builder(this)
+            .setView(rateBinding.root)
+            .setCancelable(true)
+
+        val dialog = builder.create()
+        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+
+        // "Nah" Button -> Dismiss
+        rateBinding.btnNah.setOnClickListener {
+            dialog.dismiss()
+        }
+
+        // "Rate" Button (ID is btnUpgrade in your xml) -> Open Play Store
+        rateBinding.btnUpgrade.setOnClickListener {
+            dialog.dismiss()
+            try {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$packageName")))
+            } catch (e: ActivityNotFoundException) {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$packageName")))
+            }
+        }
+
+        dialog.show()
+    }
+
     private fun showUpgradeDialog() {
         // Inflate the Dialog layout using Binding
         val dialogBinding = DialogUpgradeBinding.inflate(layoutInflater)
@@ -424,6 +488,9 @@ class MainActivity : AppCompatActivity() {
     private fun handleInput(rawInput: String) {
         // 1. LOG ANALYTICS (Add this line)
         logInputEvent("handle_input")
+
+        // cancels any delayed UI triggers
+        inputHandler.removeCallbacksAndMessages(null)
 
         // 1. CANCEL ANY RUNNING FETCH
         fetchJob?.cancel()
@@ -590,7 +657,11 @@ class MainActivity : AppCompatActivity() {
                             VscoLoader.processProfile(url, cookie, headers) { count ->
 
                                 runOnUiThread {
-                                    binding.tvTitle.text = "Found $count Items..."
+                                    // Title = Username (already stored in mTitle during handleInput)
+                                    binding.tvTitle.text = VscoLoader.mTitle
+
+                                    // Subtitle = Item Count
+                                    binding.tvSubtitle.text = "$count Items"
 
                                     /*
                                     // SHOW UI (Without Button)
@@ -619,7 +690,9 @@ class MainActivity : AppCompatActivity() {
                             if (isActive) {
                                 withContext(Dispatchers.Main) {
                                     if (VscoLoader.mMediaUrls.isNotEmpty()) {
-                                        binding.tvTitle.text = "${VscoLoader.mMediaUrls.size} Items Found"
+                                        // Final Update to ensure consistency
+                                        binding.tvTitle.text = VscoLoader.mTitle
+                                        binding.tvSubtitle.text = "${VscoLoader.mMediaUrls.size} Items"
                                         // This function will finally show the button!
                                         updateUI(UIState.PREVIEW)
                                     } else {
@@ -688,7 +761,12 @@ class MainActivity : AppCompatActivity() {
                 if (isActive) {
                     withContext(Dispatchers.Main) {
                         if (VscoLoader.mMediaUrls.isNotEmpty()) {
+
+                            // Title = Username (or page title)
                             binding.tvTitle.text = VscoLoader.mTitle
+
+                            // Subtitle = 1 Item
+                            binding.tvSubtitle.text = "1 Item"
 
                             if (isValidContextForGlide(this@MainActivity)) {
                                 Glide.with(this@MainActivity)
@@ -735,10 +813,12 @@ class MainActivity : AppCompatActivity() {
         Log.d("MainActivity", "UpdateUI to $state")
         currentState = state
 
-        // This handles ALL animations and measurements automatically
-        androidx.transition.TransitionManager.beginDelayedTransition(binding.root)
+        // 1. DISABLE TRANSITION MANAGER
+        // It causes race conditions with the keyboard closing.
+        // We will manage visibility manually.
+        // androidx.transition.TransitionManager.beginDelayedTransition(binding.root)
 
-        // Reset Inputs default state
+        // 2. Safety Reset (Ensure inputs are clickable)
         binding.etMainInput.isEnabled = true
         binding.btnPaste.isEnabled = true
         binding.btnPaste.alpha = 1.0f
@@ -751,19 +831,29 @@ class MainActivity : AppCompatActivity() {
                 binding.overlayDownloading.visibility = View.GONE
             }
             UIState.LOADING -> {
+                // Manually show Loading, Hide others
+                binding.layoutLoading.alpha = 1.0f
                 binding.layoutLoading.visibility = View.VISIBLE
+
                 binding.previewCard.visibility = View.GONE
                 binding.bottomControlCard.visibility = View.GONE
                 binding.overlayDownloading.visibility = View.GONE
 
+                // Dim input to show it's busy
                 binding.etMainInput.isEnabled = false
                 binding.btnPaste.isEnabled = false
                 binding.btnPaste.alpha = 0.3f
             }
             UIState.PREVIEW -> {
                 binding.layoutLoading.visibility = View.GONE
+
+                // Force visibility immediately
+                binding.previewCard.alpha = 1.0f
                 binding.previewCard.visibility = View.VISIBLE
+
+                binding.bottomControlCard.alpha = 1.0f
                 binding.bottomControlCard.visibility = View.VISIBLE
+
                 binding.overlayDownloading.visibility = View.GONE
 
                 binding.btnAction.setImageResource(R.drawable.ic_download)
@@ -772,29 +862,40 @@ class MainActivity : AppCompatActivity() {
             }
             UIState.DOWNLOADING -> {
                 binding.layoutLoading.visibility = View.GONE
+
+                binding.previewCard.alpha = 1.0f
                 binding.previewCard.visibility = View.VISIBLE
+
+                binding.bottomControlCard.alpha = 1.0f
                 binding.bottomControlCard.visibility = View.VISIBLE
+
                 binding.overlayDownloading.visibility = View.VISIBLE
 
-                // Hide action button cleanly
+                // Hide action button
                 binding.btnAction.visibility = View.INVISIBLE
 
+                // Lock input
                 binding.etMainInput.isEnabled = false
                 binding.btnPaste.isEnabled = false
                 binding.btnPaste.alpha = 0.3f
             }
             UIState.FINISHED -> {
                 binding.layoutLoading.visibility = View.GONE
+
+                binding.previewCard.alpha = 1.0f
                 binding.previewCard.visibility = View.VISIBLE
+
+                binding.bottomControlCard.alpha = 1.0f
                 binding.bottomControlCard.visibility = View.VISIBLE
+
                 binding.overlayDownloading.visibility = View.GONE
 
                 binding.btnAction.setImageResource(R.drawable.ic_check)
                 binding.btnAction.isEnabled = false
                 binding.btnAction.visibility = View.VISIBLE
 
-                // 2. LOG ANALYTICS (Add this line)
                 logInputEvent("download_finished")
+                incrementSuccessfulRuns()
             }
         }
     }

@@ -10,4 +10,5 @@
     <string name="clear_button">clear button</string>
     <string name="rate_dialog_body">Should I maintain VSLoader?\nLet me know!</string>
     <string name="_3_rate"><![CDATA[💚 Rate]]></string>
+    <string name="upgrade_dialog_title">👑 Upgrade</string>
 </resources>

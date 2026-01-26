@@ -17,7 +17,7 @@
             android:id="@+id/tvUpgradeTitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Upgrade"
+            android:text="@string/upgrade_dialog_title"
             android:textColor="#444444"
             android:textSize="24sp"
             android:textStyle="bold"
@@ -47,21 +47,21 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="✅    Profiles\n"
+                android:text="✅    Download Profiles\n"
                 android:textColor="@android:color/black"
                 android:paddingStart="8dp" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="✅    Collections\n"
+                android:text="✅    Download Collections\n"
                 android:textColor="@android:color/black"
                 android:paddingStart="8dp" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="✅    Fastest downloads\n"
+                android:text="✅    Fastest speed\n"
                 android:textColor="@android:color/black"
                 android:paddingStart="8dp" />
 
@@ -94,7 +94,7 @@
                 android:id="@+id/btnUpgrade"
                 android:layout_width="120dp"
                 android:layout_height="wrap_content"
-                android:backgroundTint="#4CAF50"
+                android:backgroundTint="#DA9100"
                 android:text="Upgrade"
                 android:textColor="@android:color/white" />
         </LinearLayout>
