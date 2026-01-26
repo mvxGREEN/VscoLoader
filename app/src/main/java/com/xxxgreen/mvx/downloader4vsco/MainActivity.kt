@@ -244,7 +244,7 @@ class MainActivity : AppCompatActivity() {
             // 3. Reset UI
             updateUI(UIState.EMPTY)
 
-            Toast.makeText(this, "Cancelled", Toast.LENGTH_SHORT).show()
+            //Toast.makeText(this, "Cancelled", Toast.LENGTH_SHORT).show()
         }
 
         // Action Button
