@@ -70,7 +70,7 @@ class MainActivity : AppCompatActivity() {
 
     private val textWatcher = object : TextWatcher {
         override fun afterTextChanged(s: Editable?) {
-            binding.btnClear.visibility = if (s.isNullOrEmpty()) View.GONE else View.VISIBLE
+            binding.btnClear.visibility = if (s.isNullOrEmpty()) View.INVISIBLE else View.VISIBLE
 
             // 1. Cancel previous pending search (Debounce)
             inputHandler.removeCallbacks(inputRunnable)
@@ -106,7 +106,8 @@ class MainActivity : AppCompatActivity() {
                 progressBar.progress = completed
 
                 val tvProgress = findViewById<TextView>(R.id.tvOverlayProgress)
-                tvProgress.text = "$completed / $total"
+                if (total == 1) tvProgress.text = "Downloading…"
+                else tvProgress.text = "$completed / $total items"
             }
         }
     }
@@ -238,6 +239,11 @@ class MainActivity : AppCompatActivity() {
             VscoLoader.cancelBatch(this) // Stops the downloading (Service/Receiver)
             inputHandler.removeCallbacks(inputRunnable) // Stops pending debounce
 
+            binding.webView.stopLoading()
+            binding.webView.loadUrl("about:blank") // Optional: clear the visual state
+            lastLoadedUrl = ""
+            lastLoadedMediaId = ""
+
             // 2. Clear Input
             binding.etMainInput.setText("")
 
@@ -259,26 +265,7 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         updateBackgroundMenuVisibility()
 
-        // --- RESTORE STATE FIX ---
-        // If we are currently showing "Empty" or "Loading", but we actually HAVE data,
-        // force the UI back to the Preview state.
-        if (currentState == UIState.EMPTY && VscoLoader.mMediaUrls.isNotEmpty()) {
 
-            // 1. Restore the Title
-            binding.tvTitle.text = VscoLoader.mTitle.ifEmpty { "Items Found" }
-
-            // 2. Restore the Image (Use override to force size if view is not measured yet)
-            if (isValidContextForGlide(this)) {
-                Glide.with(this)
-                    .load(VscoLoader.mMediaUrls[0])
-                    .override(1000, 1000) // Force load even if view is GONE/0dp
-                    .centerCrop()
-                    .into(binding.ivPreview)
-            }
-
-            // 3. Force the UI visible
-            updateUI(UIState.PREVIEW)
-        }
     }
 
     private fun updateBackgroundMenuVisibility() {
@@ -556,8 +543,10 @@ class MainActivity : AppCompatActivity() {
             }
             // Shortlink / Media
             else if (input.contains("vs.co")) {
+                Log.d("MainActivity", "Shortlink loading in webview: $url")
                 loadInWebView(url)
             } else {
+                Log.d("MainActivity", "Link loading in webview: $url")
                 loadMediaData(url)
             }
         }, 300)
@@ -813,31 +802,26 @@ class MainActivity : AppCompatActivity() {
         Log.d("MainActivity", "UpdateUI to $state")
         currentState = state
 
-        // 1. DISABLE TRANSITION MANAGER
-        // It causes race conditions with the keyboard closing.
-        // We will manage visibility manually.
-        // androidx.transition.TransitionManager.beginDelayedTransition(binding.root)
-
-        // 2. Safety Reset (Ensure inputs are clickable)
+        // Safety Reset (Ensure inputs are clickable)
         binding.etMainInput.isEnabled = true
         binding.btnPaste.isEnabled = true
         binding.btnPaste.alpha = 1.0f
 
         when (state) {
             UIState.EMPTY -> {
-                binding.layoutLoading.visibility = View.GONE
-                binding.previewCard.visibility = View.GONE
-                binding.bottomControlCard.visibility = View.GONE
-                binding.overlayDownloading.visibility = View.GONE
+                binding.layoutLoading.visibility = View.INVISIBLE
+                binding.previewCard.visibility = View.INVISIBLE
+                binding.bottomControlCard.visibility = View.INVISIBLE
+                binding.overlayDownloading.visibility = View.INVISIBLE
             }
             UIState.LOADING -> {
                 // Manually show Loading, Hide others
                 binding.layoutLoading.alpha = 1.0f
                 binding.layoutLoading.visibility = View.VISIBLE
 
-                binding.previewCard.visibility = View.GONE
-                binding.bottomControlCard.visibility = View.GONE
-                binding.overlayDownloading.visibility = View.GONE
+                binding.previewCard.visibility = View.INVISIBLE
+                binding.bottomControlCard.visibility = View.INVISIBLE
+                binding.overlayDownloading.visibility = View.INVISIBLE
 
                 // Dim input to show it's busy
                 binding.etMainInput.isEnabled = false
@@ -845,7 +829,7 @@ class MainActivity : AppCompatActivity() {
                 binding.btnPaste.alpha = 0.3f
             }
             UIState.PREVIEW -> {
-                binding.layoutLoading.visibility = View.GONE
+                binding.layoutLoading.visibility = View.INVISIBLE
 
                 // Force visibility immediately
                 binding.previewCard.alpha = 1.0f
@@ -854,14 +838,14 @@ class MainActivity : AppCompatActivity() {
                 binding.bottomControlCard.alpha = 1.0f
                 binding.bottomControlCard.visibility = View.VISIBLE
 
-                binding.overlayDownloading.visibility = View.GONE
+                binding.overlayDownloading.visibility = View.INVISIBLE
 
                 binding.btnAction.setImageResource(R.drawable.ic_download)
                 binding.btnAction.isEnabled = true
                 binding.btnAction.visibility = View.VISIBLE
             }
             UIState.DOWNLOADING -> {
-                binding.layoutLoading.visibility = View.GONE
+                binding.layoutLoading.visibility = View.INVISIBLE
 
                 binding.previewCard.alpha = 1.0f
                 binding.previewCard.visibility = View.VISIBLE
@@ -880,7 +864,7 @@ class MainActivity : AppCompatActivity() {
                 binding.btnPaste.alpha = 0.3f
             }
             UIState.FINISHED -> {
-                binding.layoutLoading.visibility = View.GONE
+                binding.layoutLoading.visibility = View.INVISIBLE
 
                 binding.previewCard.alpha = 1.0f
                 binding.previewCard.visibility = View.VISIBLE
@@ -888,7 +872,7 @@ class MainActivity : AppCompatActivity() {
                 binding.bottomControlCard.alpha = 1.0f
                 binding.bottomControlCard.visibility = View.VISIBLE
 
-                binding.overlayDownloading.visibility = View.GONE
+                binding.overlayDownloading.visibility = View.INVISIBLE
 
                 binding.btnAction.setImageResource(R.drawable.ic_check)
                 binding.btnAction.isEnabled = false
@@ -1008,7 +992,7 @@ class MainActivity : AppCompatActivity() {
             initAdMob()
         } else {
             binding.adContainer.removeAllViews()
-            binding.adContainer.visibility = View.GONE
+            binding.adContainer.visibility = View.INVISIBLE
         }
     }
 
@@ -1098,7 +1082,7 @@ class MainActivity : AppCompatActivity() {
             .start()
     }
 
-    private fun View.fadeOut(targetVisibility: Int = View.GONE, duration: Long = 100) {
+    private fun View.fadeOut(targetVisibility: Int = View.INVISIBLE, duration: Long = 100) {
         // If already in the target state, do nothing
         if (visibility == targetVisibility && alpha == 0f) return
 

@@ -61,7 +61,7 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/clear_button"
             android:src="@drawable/ic_close"
-            android:visibility="gone"
+            android:visibility="invisible"
             app:tint="@color/text_secondary"
             tools:visibility="visible"/>
 
@@ -87,7 +87,7 @@
         android:layout_marginBottom="32dp"
         android:orientation="vertical"
         android:gravity="center"
-        android:visibility="gone"
+        android:visibility="invisible"
         app:layout_constraintTop_toBottomOf="@+id/searchContainer"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -117,7 +117,7 @@
         app:cardCornerRadius="16dp"
         app:cardBackgroundColor="@color/bg_card"
         app:cardElevation="0dp"
-        android:visibility="gone"
+        android:visibility="invisible"
         app:layout_constraintTop_toBottomOf="@+id/searchContainer"
         tools:visibility="visible">
 
@@ -137,7 +137,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:background="@color/overlay_dark"
-                android:visibility="gone">
+                android:visibility="invisible">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -180,7 +180,7 @@
         app:cardCornerRadius="12dp"
         app:cardBackgroundColor="@color/bg_card"
         app:cardElevation="0dp"
-        android:visibility="gone"
+        android:visibility="invisible"
         app:layout_constraintTop_toBottomOf="@+id/previewCard"
         tools:visibility="visible">
 
