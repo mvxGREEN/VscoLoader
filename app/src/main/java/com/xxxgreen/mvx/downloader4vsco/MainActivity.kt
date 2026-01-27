@@ -898,6 +898,12 @@ class MainActivity : AppCompatActivity() {
                 incrementSuccessfulRuns()
             }
         }
+
+        // force layout remeasurement
+        binding.root.post {
+            binding.root.requestLayout()
+            binding.root.invalidate()
+        }
     }
 
     // --- BILLING LOGIC ---
