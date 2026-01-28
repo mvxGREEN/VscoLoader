@@ -1029,11 +1029,36 @@ class MainActivity : AppCompatActivity() {
 
     private fun initAdMob() {
         MobileAds.initialize(this) {}
+
+        // Remove old views if reloading
+        binding.adContainer.removeAllViews()
+
         val adView = AdView(this)
-        adView.setAdSize(AdSize.BANNER)
         adView.adUnitId = bannerId
+
+        // FIX: Use Adaptive Banner size instead of fixed AdSize.BANNER
+        adView.setAdSize(getAdSize())
+
         binding.adContainer.addView(adView)
         adView.loadAd(AdRequest.Builder().build())
+    }
+
+    // Helper to calculate the adaptive ad size
+    private fun getAdSize(): AdSize {
+        // Determine the screen width (less decorations) to use for the ad width.
+        val display = windowManager.defaultDisplay
+        val outMetrics = android.util.DisplayMetrics()
+        display.getMetrics(outMetrics)
+
+        val density = outMetrics.density
+
+        var adWidthPixels = binding.adContainer.width.toFloat()
+        if (adWidthPixels == 0f) {
+            adWidthPixels = outMetrics.widthPixels.toFloat()
+        }
+
+        val adWidth = (adWidthPixels / density).toInt()
+        return AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(this, adWidth)
     }
 
     // Since launchMode is singleInstance, new shares will call this if app is already open
@@ -1059,42 +1084,6 @@ class MainActivity : AppCompatActivity() {
                 handleInput(sharedText)
             }
         }
-    }
-
-    // --- ANIMATION HELPERS ---
-
-    private fun View.fadeIn(duration: Long = 200) {
-        // If already visible and opaque, do nothing
-        if (visibility == View.VISIBLE && alpha == 1f) return
-
-        // Cancel any ongoing animation
-        animate().cancel()
-
-        // Prepare view
-        alpha = 0f
-        visibility = View.VISIBLE
-
-        // Animate
-        animate()
-            .alpha(1f)
-            .setDuration(duration)
-            .withEndAction(null) // Clear any old end actions
-            .start()
-    }
-
-    private fun View.fadeOut(targetVisibility: Int = View.INVISIBLE, duration: Long = 100) {
-        // If already in the target state, do nothing
-        if (visibility == targetVisibility && alpha == 0f) return
-
-        animate().cancel()
-
-        animate()
-            .alpha(0f)
-            .setDuration(duration)
-            .withEndAction {
-                visibility = targetVisibility
-            }
-            .start()
     }
 
     override fun onDestroy() {
