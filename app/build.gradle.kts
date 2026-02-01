@@ -14,8 +14,8 @@ android {
         applicationId = "com.xxxgreen.mvx.downloader4vsco"
         minSdk = 24
         targetSdk = 36
-        versionCode = 93
-        versionName = "3.1.5"
+        versionCode = 94
+        versionName = "3.1.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

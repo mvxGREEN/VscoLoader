@@ -482,8 +482,23 @@ class MainActivity : AppCompatActivity() {
         // 1. CANCEL ANY RUNNING FETCH
         fetchJob?.cancel()
 
+        binding.webView.stopLoading()
+
+        // 2. Clear the View state
+        binding.webView.loadUrl("about:blank")
+        binding.webView.clearCache(true)
+        binding.webView.clearHistory()
+
+        // 3. Clear System Web Storage (Cookies & DOM)
+        // This ensures SoundCloud sees us as a fresh "Guest" every time
+        android.webkit.CookieManager.getInstance().removeAllCookies(null)
+        android.webkit.WebStorage.getInstance().deleteAllData()
+
+        VscoLoader.resetVars()
+
         // 2. HIDE KEYBOARD
-        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+        val imm =
+            getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
         imm.hideSoftInputFromWindow(binding.etMainInput.windowToken, 0)
         binding.etMainInput.clearFocus()
 
@@ -492,7 +507,11 @@ class MainActivity : AppCompatActivity() {
         if (input.contains("http://")) input = input.replace("http://", "https://")
         if (input.endsWith("/")) input = input.substring(0, input.length - 1)
 
-        if (!VALID_INPUT_REGEX.matcher(input).find()) return
+        if (!VALID_INPUT_REGEX.matcher(input).find()) {
+            // TODO log event
+            Toast.makeText(this, "Invalid URL", Toast.LENGTH_SHORT).show()
+            return
+        }
 
         // 4. INSTANT UI FEEDBACK (The Fix)
         // Show the spinner NOW. Do not wait for the keyboard.
@@ -510,8 +529,6 @@ class MainActivity : AppCompatActivity() {
 
             val prefs = getSharedPreferences("com.xxxgreen.mvx.prefs", Context.MODE_PRIVATE)
             val isGold = prefs.getBoolean("IS_GOLD", false)
-
-            VscoLoader.resetVars()
 
             // Collection
             if (url.contains("/collection")) {
@@ -989,10 +1006,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun checkSubscriptionAndLoadAds(isGold: Boolean) {
         if (!isGold) {
+            // Load Ads if NOT gold
             initAdMob()
         } else {
-            binding.adContainer.removeAllViews()
-            binding.adContainer.visibility = View.INVISIBLE
+            // Hide Ads if Gold
+            binding.adView.visibility = View.GONE
+            //mInterstitialAd = null
         }
     }
 
@@ -1030,35 +1049,22 @@ class MainActivity : AppCompatActivity() {
     private fun initAdMob() {
         MobileAds.initialize(this) {}
 
-        // Remove old views if reloading
-        binding.adContainer.removeAllViews()
+        // Ensure the view is visible
+        binding.adView.visibility = View.VISIBLE
 
-        val adView = AdView(this)
-        adView.adUnitId = bannerId
+        // Load the ad defined in XML
+        val adRequest = AdRequest.Builder().build()
+        binding.adView.loadAd(adRequest)
 
-        // FIX: Use Adaptive Banner size instead of fixed AdSize.BANNER
-        adView.setAdSize(getAdSize())
-
-        binding.adContainer.addView(adView)
-        adView.loadAd(AdRequest.Builder().build())
-    }
-
-    // Helper to calculate the adaptive ad size
-    private fun getAdSize(): AdSize {
-        // Determine the screen width (less decorations) to use for the ad width.
-        val display = windowManager.defaultDisplay
-        val outMetrics = android.util.DisplayMetrics()
-        display.getMetrics(outMetrics)
-
-        val density = outMetrics.density
-
-        var adWidthPixels = binding.adContainer.width.toFloat()
-        if (adWidthPixels == 0f) {
-            adWidthPixels = outMetrics.widthPixels.toFloat()
+        // Log for confirmation
+        binding.adView.adListener = object : AdListener() {
+            override fun onAdFailedToLoad(error: LoadAdError) {
+                Log.e("AdMobBanner", "XML Load Failed: ${error.message}")
+            }
+            override fun onAdLoaded() {
+                Log.d("AdMobBanner", "XML Ad Loaded")
+            }
         }
-
-        val adWidth = (adWidthPixels / density).toInt()
-        return AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(this, adWidth)
     }
 
     // Since launchMode is singleInstance, new shares will call this if app is already open
