@@ -709,6 +709,9 @@ class MainActivity : AppCompatActivity() {
                             }
                         } catch (e: Exception) {
                             Log.e("MainActivity", "Profile fetch failed", e)
+
+                            logErrorEvent("vl_error_profile", e)
+
                             if (isActive) {
                                 withContext(Dispatchers.Main) { updateUI(UIState.EMPTY) }
                             }
@@ -798,6 +801,8 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             } catch (e: Exception) {
+                logErrorEvent("vl_error_loading", e)
+
                 if (isActive) {
                     withContext(Dispatchers.Main) {
                         Toast.makeText(this@MainActivity, "Load Failed", Toast.LENGTH_SHORT).show()
@@ -819,10 +824,23 @@ class MainActivity : AppCompatActivity() {
         Log.d("MainActivity", "UpdateUI to $state")
         currentState = state
 
-        // Safety Reset (Ensure inputs are clickable)
+        // 1. LOG FIREBASE EVENTS BASED ON STATE
+        val eventName = when (state) {
+            UIState.LOADING -> "vl_ui_loading"
+            UIState.PREVIEW -> "vl_ui_preview"
+            UIState.DOWNLOADING -> "vl_ui_downloading"
+            UIState.FINISHED -> "vl_ui_finish"
+            UIState.EMPTY -> null // Usually no need to log empty/reset state
+        }
+
+        eventName?.let {
+            firebaseAnalytics.logEvent(it, null)
+            Log.d("Analytics", "Logged UI Event: $it")
+        }
+
+        // --- Rest of your existing UI logic ---
         binding.etMainInput.isEnabled = true
         binding.btnPaste.isEnabled = true
-        binding.btnPaste.alpha = 1.0f
 
         when (state) {
             UIState.EMPTY -> {
@@ -832,75 +850,36 @@ class MainActivity : AppCompatActivity() {
                 binding.overlayDownloading.visibility = View.INVISIBLE
             }
             UIState.LOADING -> {
-                // Manually show Loading, Hide others
                 binding.layoutLoading.alpha = 1.0f
                 binding.layoutLoading.visibility = View.VISIBLE
-
                 binding.previewCard.visibility = View.INVISIBLE
                 binding.bottomControlCard.visibility = View.INVISIBLE
                 binding.overlayDownloading.visibility = View.INVISIBLE
-
-                // Dim input to show it's busy
                 binding.etMainInput.isEnabled = false
-                binding.btnPaste.isEnabled = false
-                binding.btnPaste.alpha = 0.3f
             }
             UIState.PREVIEW -> {
                 binding.layoutLoading.visibility = View.INVISIBLE
-
-                // Force visibility immediately
-                binding.previewCard.alpha = 1.0f
                 binding.previewCard.visibility = View.VISIBLE
-
-                binding.bottomControlCard.alpha = 1.0f
                 binding.bottomControlCard.visibility = View.VISIBLE
-
-                binding.overlayDownloading.visibility = View.INVISIBLE
-
-                binding.btnAction.setImageResource(R.drawable.ic_download)
-                binding.btnAction.isEnabled = true
                 binding.btnAction.visibility = View.VISIBLE
             }
             UIState.DOWNLOADING -> {
-                binding.layoutLoading.visibility = View.INVISIBLE
-
-                binding.previewCard.alpha = 1.0f
-                binding.previewCard.visibility = View.VISIBLE
-
-                binding.bottomControlCard.alpha = 1.0f
-                binding.bottomControlCard.visibility = View.VISIBLE
-
                 binding.overlayDownloading.visibility = View.VISIBLE
-
-                // Hide action button
                 binding.btnAction.visibility = View.INVISIBLE
-
-                // Lock input
                 binding.etMainInput.isEnabled = false
-                binding.btnPaste.isEnabled = false
-                binding.btnPaste.alpha = 0.3f
             }
             UIState.FINISHED -> {
-                binding.layoutLoading.visibility = View.INVISIBLE
-
-                binding.previewCard.alpha = 1.0f
-                binding.previewCard.visibility = View.VISIBLE
-
-                binding.bottomControlCard.alpha = 1.0f
-                binding.bottomControlCard.visibility = View.VISIBLE
-
                 binding.overlayDownloading.visibility = View.INVISIBLE
-
                 binding.btnAction.setImageResource(R.drawable.ic_check)
                 binding.btnAction.isEnabled = false
                 binding.btnAction.visibility = View.VISIBLE
 
-                logInputEvent("download_finished")
+                // You can remove the old "download_finished" call if you want
+                // to strictly use "vl_ui_finish" now.
                 incrementSuccessfulRuns()
             }
         }
 
-        // force layout remeasurement
         binding.root.post {
             binding.root.requestLayout()
             binding.root.invalidate()
@@ -985,8 +964,10 @@ class MainActivity : AppCompatActivity() {
                 billingClient.acknowledgePurchase(acknowledgePurchaseParams) { billingResult ->
                     if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
                         runOnUiThread {
-                            Toast.makeText(this, "Thank you for your support <3", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this, "Thanks for your support <3", Toast.LENGTH_SHORT).show()
                             saveGoldStatus(true)
+                            updateUpgradeIcon(true)
+                            binding.adView.visibility = View.GONE
                             recreate()
                         }
                     }
@@ -1090,6 +1071,15 @@ class MainActivity : AppCompatActivity() {
                 handleInput(sharedText)
             }
         }
+    }
+
+    private fun logErrorEvent(eventName: String, error: Exception) {
+        val bundle = Bundle().apply {
+            putString("error_message", error.message ?: "Unknown error")
+            putString("error_class", error.javaClass.simpleName)
+        }
+        firebaseAnalytics.logEvent(eventName, bundle)
+        Log.e("Analytics", "Logged Error: $eventName", error)
     }
 
     override fun onDestroy() {

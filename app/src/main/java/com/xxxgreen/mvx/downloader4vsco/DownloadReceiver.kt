@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import com.google.firebase.analytics.FirebaseAnalytics
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -106,7 +107,15 @@ class DownloadReceiver : BroadcastReceiver() {
 
             CoroutineScope(Dispatchers.IO).launch {
                 // 1. Concat
-                VscoLoader.concatTs()
+                val resultPath = VscoLoader.concatTs() // This returns empty string on failure
+
+                // NEW: Check for failure
+                if (resultPath.isEmpty()) {
+                    val firebase = FirebaseAnalytics.getInstance(context)
+                    firebase.logEvent("vl_error_concat", null)
+                    Log.e(TAG, "Concatenation failed, logged event.")
+                    return@launch // Stop processing
+                }
 
                 // 2. Scan media so it shows in Gallery
                 scanMediaFile(context, VscoLoader.mFilePath)
@@ -132,9 +141,14 @@ class DownloadReceiver : BroadcastReceiver() {
         Log.d(TAG, "Standard media file downloaded.")
 
         CoroutineScope(Dispatchers.IO).launch {
-            // 1. Scan File
-            val filePath = VscoLoader.absPathDocs + VscoLoader.mTitle +
-                    (if (VscoLoader.mThumbnailFilename.contains("jpg")) ".jpg" else ".mp4")
+            // 1. Determine the path based on file type
+            val isVideo = VscoLoader.mThumbnailFilename.contains("mp4") || !VscoLoader.mThumbnailFilename.contains("jpg")
+
+            val folderPath = if (isVideo) VscoLoader.absPathMovies else VscoLoader.absPathPictures
+            val extension = if (isVideo) ".mp4" else ".jpg"
+
+            val filePath = folderPath + VscoLoader.mTitle + extension
+
             scanMediaFile(context, filePath)
 
             // 2. Increment Progress

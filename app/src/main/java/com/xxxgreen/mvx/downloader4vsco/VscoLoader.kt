@@ -43,15 +43,17 @@ object VscoLoader {
     var totalItems = 0
     var completedItems = 0
 
-    val absPathDocs: String
-        get() = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS).absolutePath + "/"
+    // Change these properties in VscoLoader.kt
+    val absPathPictures: String
+        get() = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES).absolutePath + "/VSLoader/"
 
-    val absPathDocsTemp: String
-        get() = absPathDocs + "temp/"
+    val absPathMovies: String
+        get() = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES).absolutePath + "/VSLoader/"
 
     fun prepareFileDirs() {
-        File(absPathDocs).mkdirs()
-        File(absPathDocsTemp).mkdirs()
+        File(absPathPictures).mkdirs()
+        File(absPathMovies).mkdirs()
+        File(absPathMovies + "temp/").mkdirs() // Keep temp files in Movies/temp
     }
 
     // New Kill Switch Flag
@@ -96,27 +98,28 @@ object VscoLoader {
     // --- DOWNLOADER FUNCTIONS ---
 
     fun downloadFile(context: Context, url: String) {
-        // If it's a playlist, route to specific logic
         if (url.contains(".m3u8") || url.contains("stream.mux.com")) {
             downloadM3u(context, url)
             return
         }
 
-        val fileName = if (url.contains(".mp4")) "$mTitle.mp4" else "$mTitle.jpg"
+        val isVideo = url.contains(".mp4")
+        val fileName = if (isVideo) "$mTitle.mp4" else "$mTitle.jpg"
 
-        // LOGIC CHANGE:
-        // If downloading a Profile or Collection, auto-hide the notification when done.
-        // Otherwise (Single link), keep it visible so the user can click to open.
+        // Choose Directory based on type
+        val subDir = "VSLoader"
+        val publicDir = if (isVideo) Environment.DIRECTORY_MOVIES else Environment.DIRECTORY_PICTURES
+
         val visibility = if (isProfile || isCollection) {
-            DownloadManager.Request.VISIBILITY_VISIBLE // Disappears after completion
+            DownloadManager.Request.VISIBILITY_VISIBLE
         } else {
-            DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED // Stays in shade
+            DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED
         }
 
         val request = DownloadManager.Request(Uri.parse(url))
             .setTitle(fileName)
-            .setNotificationVisibility(visibility) // <--- Apply the variable here
-            .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOCUMENTS, fileName)
+            .setNotificationVisibility(visibility)
+            .setDestinationInExternalPublicDir(publicDir, "$subDir/$fileName") // Updated Path
             .setAllowedOverMetered(true)
             .setAllowedOverRoaming(true)
 
@@ -149,7 +152,7 @@ object VscoLoader {
 
     fun extractUrlsFromM3u(): MutableList<String> {
         val urls = mutableListOf<String>()
-        val file = File(absPathDocs + mM3uFileName + ".m3u8")
+        val file = File(absPathMovies + mM3uFileName + ".m3u8")
         try {
             if (file.exists()) {
                 file.forEachLine { line ->
@@ -165,10 +168,10 @@ object VscoLoader {
 
     fun concatTs(): String {
         Log.d(TAG, "ConcatTs started")
-        val destPath = getUniqueFilePath(absPathDocs + mTitle + ".mp4")
+        val destPath = getUniqueFilePath(absPathMovies + mTitle + ".mp4")
         mFilePath = destPath
 
-        val tempDir = File(absPathDocsTemp)
+        val tempDir = File(absPathMovies)
         val chunkFiles = tempDir.listFiles { _, name -> name.endsWith(".ts") }
             ?.sortedBy { it.name.substringAfter("s").substringBefore(".ts").toIntOrNull() ?: 0 }
 
@@ -197,7 +200,7 @@ object VscoLoader {
     }
 
     fun deleteTempFiles() {
-        File(absPathDocsTemp).deleteRecursively()
+        File(absPathMovies).deleteRecursively()
     }
 
     // --- EXTRACTION LOGIC (VIDEO / PHOTO) ---
