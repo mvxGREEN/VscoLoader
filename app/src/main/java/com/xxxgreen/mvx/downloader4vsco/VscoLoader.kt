@@ -131,7 +131,7 @@ object VscoLoader {
         mM3uUrl = url // Flag for receiver
         val request = DownloadManager.Request(Uri.parse(url))
             .setTitle("m3u8 download")
-            .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOCUMENTS, "$mM3uFileName.m3u8")
+            .setDestinationInExternalPublicDir(Environment.DIRECTORY_MOVIES, "VSLoader/$mM3uFileName.m3u8")
 
         val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         dm.enqueue(request)
@@ -142,7 +142,7 @@ object VscoLoader {
         val request = DownloadManager.Request(Uri.parse(url))
             .setTitle("ts download")
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_HIDDEN)
-            .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOCUMENTS, "temp/$fileName")
+            .setDestinationInExternalPublicDir(Environment.DIRECTORY_MOVIES, "VSLoader/$fileName")
 
         val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         dm.enqueue(request)

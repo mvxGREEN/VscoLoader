@@ -129,7 +129,7 @@ class MainActivity : AppCompatActivity() {
                     finish() // Closes the app and removes from recents (optional) or just finish()
                 }, 1000)
             } else {
-                Toast.makeText(context, "Saved to Documents!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Saved!", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -607,7 +607,7 @@ class MainActivity : AppCompatActivity() {
     private fun setupWebView() {
         binding.webView.settings.javaScriptEnabled = true
         binding.webView.settings.domStorageEnabled = true
-        binding.webView.settings.userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        binding.webView.settings.userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         binding.webView.settings.cacheMode = WebSettings.LOAD_NO_CACHE
 
         binding.webView.webViewClient = object : WebViewClient() {
