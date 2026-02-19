@@ -45,10 +45,10 @@ object VscoLoader {
 
     // Change these properties in VscoLoader.kt
     val absPathPictures: String
-        get() = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES).absolutePath + "/VSLoader/"
+        get() = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES).absolutePath + "/VscoLoader/"
 
     val absPathMovies: String
-        get() = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES).absolutePath + "/VSLoader/"
+        get() = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES).absolutePath + "/VscoLoader/"
 
     fun prepareFileDirs() {
         File(absPathPictures).mkdirs()
@@ -107,7 +107,7 @@ object VscoLoader {
         val fileName = if (isVideo) "$mTitle.mp4" else "$mTitle.jpg"
 
         // Choose Directory based on type
-        val subDir = "VSLoader"
+        val subDir = "VscoLoader"
         val publicDir = if (isVideo) Environment.DIRECTORY_MOVIES else Environment.DIRECTORY_PICTURES
 
         val visibility = if (isProfile || isCollection) {
@@ -131,7 +131,7 @@ object VscoLoader {
         mM3uUrl = url // Flag for receiver
         val request = DownloadManager.Request(Uri.parse(url))
             .setTitle("m3u8 download")
-            .setDestinationInExternalPublicDir(Environment.DIRECTORY_MOVIES, "VSLoader/$mM3uFileName.m3u8")
+            .setDestinationInExternalPublicDir(Environment.DIRECTORY_MOVIES, "VscoLoader/$mM3uFileName.m3u8")
 
         val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         dm.enqueue(request)
@@ -142,7 +142,7 @@ object VscoLoader {
         val request = DownloadManager.Request(Uri.parse(url))
             .setTitle("ts download")
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_HIDDEN)
-            .setDestinationInExternalPublicDir(Environment.DIRECTORY_MOVIES, "VSLoader/$fileName")
+            .setDestinationInExternalPublicDir(Environment.DIRECTORY_MOVIES, "VscoLoader/$fileName")
 
         val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         dm.enqueue(request)

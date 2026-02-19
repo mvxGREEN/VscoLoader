@@ -1,6 +1,5 @@
 package com.xxxgreen.mvx.downloader4vsco
 
-// IMPORT THE GENERATED BINDING CLASSES
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
@@ -27,6 +26,7 @@ import androidx.core.content.ContextCompat
 import com.android.billingclient.api.*
 import com.bumptech.glide.Glide
 import com.google.android.gms.ads.*
+import com.google.android.play.core.review.ReviewManagerFactory
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.xxxgreen.mvx.downloader4vsco.databinding.ActivityMainBinding
 import com.xxxgreen.mvx.downloader4vsco.databinding.DialogRateBinding
@@ -41,12 +41,16 @@ class MainActivity : AppCompatActivity() {
     private val bannerId = bannerIdTest
     private lateinit var firebaseAnalytics: FirebaseAnalytics
 
+    private val PREFS_NAME = "VscoLoaderPrefs"
+    private val KEY_APP_OPEN_COUNT = "AppOpenCount"
+
     // 1. Declare Binding Object
     private lateinit var binding: ActivityMainBinding
 
     private var fetchJob: Job? = null
 
     private lateinit var requestNotificationLauncher: androidx.activity.result.ActivityResultLauncher<String>
+    private lateinit var requestWritePermissionLauncher: androidx.activity.result.ActivityResultLauncher<String>
 
     // Logic Variables
     private val VALID_INPUT_REGEX = Pattern.compile("^$|((?:vsco\\.)|(?:vs\\.)?co\\/)", Pattern.CASE_INSENSITIVE)
@@ -163,8 +167,22 @@ class MainActivity : AppCompatActivity() {
             requestBatteryOptimization()
         }
 
-        // Setup Utilities
-        setupListeners()
+        requestWritePermissionLauncher = registerForActivityResult(
+            androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+        ) { isGranted: Boolean ->
+            if (isGranted) {
+                // Permission granted, retry the download
+                startDownloadService()
+            } else {
+                Toast.makeText(this, "Storage permission is required on this Android version to save files.", Toast.LENGTH_LONG).show()
+                // Reset UI so they can try clicking the button again
+                if (currentState == UIState.DOWNLOADING || currentState == UIState.LOADING) {
+                    updateUI(UIState.PREVIEW)
+                }
+            }
+        }
+
+       setupListeners()
         VscoLoader.prepareFileDirs()
 
         // Billing & Ads
@@ -814,6 +832,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startDownloadService() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                // Permission missing: Request it and STOP here.
+                requestWritePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                return
+            }
+        }
+
         updateUI(UIState.DOWNLOADING)
         val intent = Intent(this, DownloadService::class.java)
         intent.action = "START_SERVICE"
@@ -862,6 +888,8 @@ class MainActivity : AppCompatActivity() {
                 binding.previewCard.visibility = View.VISIBLE
                 binding.bottomControlCard.visibility = View.VISIBLE
                 binding.btnAction.visibility = View.VISIBLE
+                binding.btnAction.isEnabled = true
+                binding.btnAction.setImageResource(R.drawable.ic_download)
             }
             UIState.DOWNLOADING -> {
                 binding.overlayDownloading.visibility = View.VISIBLE
@@ -1069,6 +1097,44 @@ class MainActivity : AppCompatActivity() {
 
                 // 4. Manual Trigger (Only one download starts)
                 handleInput(sharedText)
+            }
+        }
+
+        // check whether to show in-app review
+        if (!VscoLoader.isShared) {
+            checkAndShowInAppReview()
+        }
+    }
+
+    private fun checkAndShowInAppReview() {
+        val sharedPrefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val currentCount = sharedPrefs.getInt(KEY_APP_OPEN_COUNT, 0) + 1
+
+        // Save the new count immediately
+        sharedPrefs.edit().putInt(KEY_APP_OPEN_COUNT, currentCount).apply()
+
+        Log.d("MainActivity", "App Open Count: $currentCount")
+
+        // Trigger only on the 3rd open
+        if (currentCount == 3) {
+            val manager = ReviewManagerFactory.create(this)
+            val request = manager.requestReviewFlow()
+
+            request.addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    // We got the ReviewInfo object
+                    val reviewInfo = task.result
+                    val flow = manager.launchReviewFlow(this, reviewInfo)
+                    flow.addOnCompleteListener { _ ->
+                        // The flow has finished. The API does not indicate whether the user
+                        // reviewed or not, or even if the review dialog was shown.
+                        // Thus, no matter the result, we continue our app flow.
+                        Log.d("MainActivity", "In-App Review flow completed")
+                    }
+                } else {
+                    // There was some problem, log or handle the error code.
+                    Log.e("MainActivity", "Review info request failed", task.exception)
+                }
             }
         }
     }
