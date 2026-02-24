@@ -33,6 +33,7 @@ import com.xxxgreen.mvx.downloader4vsco.databinding.DialogRateBinding
 import com.xxxgreen.mvx.downloader4vsco.databinding.DialogUpgradeBinding
 import kotlinx.coroutines.*
 import org.jsoup.Jsoup
+import java.io.File
 import java.util.regex.Pattern
 
 class MainActivity : AppCompatActivity() {
@@ -44,9 +45,7 @@ class MainActivity : AppCompatActivity() {
     private val PREFS_NAME = "VscoLoaderPrefs"
     private val KEY_APP_OPEN_COUNT = "AppOpenCount"
 
-    // 1. Declare Binding Object
     private lateinit var binding: ActivityMainBinding
-
     private var fetchJob: Job? = null
 
     private lateinit var requestNotificationLauncher: androidx.activity.result.ActivityResultLauncher<String>
@@ -127,6 +126,9 @@ class MainActivity : AppCompatActivity() {
 
                 // reset shared flag
                 VscoLoader.isShared = false
+
+                binding.etMainInput.setText("")
+                updateUI(UIState.EMPTY)
 
                 // Delay slightly to let the user see the success message, then close
                 Handler(Looper.getMainLooper()).postDelayed({
@@ -276,6 +278,11 @@ class MainActivity : AppCompatActivity() {
             if (currentState == UIState.PREVIEW) {
                 startDownloadService()
             }
+        }
+
+        // share button
+        binding.btnShare.setOnClickListener {
+            shareDownloadedFile()
         }
     }
 
@@ -428,10 +435,10 @@ class MainActivity : AppCompatActivity() {
             if (cycle % 2 != 0) {
                 // Check if user is already Gold before annoying them with Upgrade dialog
                 val isGold = prefs.getBoolean("IS_GOLD", false)
-                if (!isGold) {
+                if (!isGold && !VscoLoader.isShared) {
                     showUpgradeDialog()
                 }
-            } else {
+            } else if (!VscoLoader.isShared) {
                 showRateDialog()
             }
         }
@@ -499,16 +506,18 @@ class MainActivity : AppCompatActivity() {
 
         // 1. CANCEL ANY RUNNING FETCH
         fetchJob?.cancel()
-
         binding.webView.stopLoading()
 
-        // 2. Clear the View state
+        // Prevent the guard clause from blocking consecutive loads
+        lastLoadedUrl = ""
+        lastLoadedMediaId = null
+
+        // Clear the webview state
         binding.webView.loadUrl("about:blank")
         binding.webView.clearCache(true)
         binding.webView.clearHistory()
 
-        // 3. Clear System Web Storage (Cookies & DOM)
-        // This ensures SoundCloud sees us as a fresh "Guest" every time
+        // Clear System Web Storage (Cookies & DOM)
         android.webkit.CookieManager.getInstance().removeAllCookies(null)
         android.webkit.WebStorage.getInstance().deleteAllData()
 
@@ -522,17 +531,21 @@ class MainActivity : AppCompatActivity() {
 
         // 3. FAST VALIDATION (Do this immediately)
         var input = rawInput.trim()
+        // Extract strictly the URL chunk by splitting on whitespace.
+        // This strips out "Check out my pic! " from Share Intents.
+        input = input.split("\\s+".toRegex()).firstOrNull {
+            it.contains("vs.co") || it.contains("vsco.co")
+        } ?: input
+
         if (input.contains("http://")) input = input.replace("http://", "https://")
         if (input.endsWith("/")) input = input.substring(0, input.length - 1)
 
         if (!VALID_INPUT_REGEX.matcher(input).find()) {
-            // TODO log event
             Toast.makeText(this, "Invalid URL", Toast.LENGTH_SHORT).show()
             return
         }
 
-        // 4. INSTANT UI FEEDBACK (The Fix)
-        // Show the spinner NOW. Do not wait for the keyboard.
+        // 4. INSTANT UI FEEDBACK
         updateUI(UIState.LOADING)
 
         // 5. DELAYED PROCESSING
@@ -874,6 +887,7 @@ class MainActivity : AppCompatActivity() {
                 binding.previewCard.visibility = View.INVISIBLE
                 binding.bottomControlCard.visibility = View.INVISIBLE
                 binding.overlayDownloading.visibility = View.INVISIBLE
+                binding.btnShare.visibility = View.INVISIBLE
             }
             UIState.LOADING -> {
                 binding.layoutLoading.alpha = 1.0f
@@ -882,6 +896,7 @@ class MainActivity : AppCompatActivity() {
                 binding.bottomControlCard.visibility = View.INVISIBLE
                 binding.overlayDownloading.visibility = View.INVISIBLE
                 binding.etMainInput.isEnabled = false
+                binding.btnShare.visibility = View.INVISIBLE
             }
             UIState.PREVIEW -> {
                 binding.layoutLoading.visibility = View.INVISIBLE
@@ -890,17 +905,20 @@ class MainActivity : AppCompatActivity() {
                 binding.btnAction.visibility = View.VISIBLE
                 binding.btnAction.isEnabled = true
                 binding.btnAction.setImageResource(R.drawable.ic_download)
+                binding.btnShare.visibility = View.INVISIBLE
             }
             UIState.DOWNLOADING -> {
                 binding.overlayDownloading.visibility = View.VISIBLE
                 binding.btnAction.visibility = View.INVISIBLE
                 binding.etMainInput.isEnabled = false
+                binding.btnShare.visibility = View.INVISIBLE
             }
             UIState.FINISHED -> {
                 binding.overlayDownloading.visibility = View.INVISIBLE
                 binding.btnAction.setImageResource(R.drawable.ic_check)
                 binding.btnAction.isEnabled = false
                 binding.btnAction.visibility = View.VISIBLE
+                binding.btnShare.visibility = View.VISIBLE
 
                 // You can remove the old "download_finished" call if you want
                 // to strictly use "vl_ui_finish" now.
@@ -1137,6 +1155,51 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    private fun shareDownloadedFile() {
+        val file = getDownloadedFile()
+
+        if (file != null && file.exists()) {
+            try {
+                // Generate a secure content:// URI using FileProvider
+                val uri = androidx.core.content.FileProvider.getUriForFile(
+                    this,
+                    "${applicationContext.packageName}.provider",
+                    file
+                )
+
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = if (file.extension == "mp4") "video/mp4" else "image/jpeg"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+
+                startActivity(Intent.createChooser(shareIntent, "Share to..."))
+                logInputEvent("vl_action_share") // Optional: log that they shared
+
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Error sharing file", e)
+                Toast.makeText(this, "Unable to share file.", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            Toast.makeText(this, "File not found.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun getDownloadedFile(): File? {
+        // 1. Check if it's a concatenated video playlist file (m3u8/ts)
+        if (VscoLoader.mFilePath.isNotEmpty()) {
+            return File(VscoLoader.mFilePath)
+        }
+
+        // 2. Check for standard image/video download
+        val isVideo = VscoLoader.mThumbnailFilename.contains("mp4") || !VscoLoader.mThumbnailFilename.contains("jpg")
+        val folderPath = if (isVideo) VscoLoader.absPathMovies else VscoLoader.absPathPictures
+        val extension = if (isVideo) ".mp4" else ".jpg"
+
+        val filePath = folderPath + VscoLoader.mTitle + extension
+        return File(filePath)
     }
 
     private fun logErrorEvent(eventName: String, error: Exception) {

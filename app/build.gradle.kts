@@ -14,8 +14,8 @@ android {
         applicationId = "com.xxxgreen.mvx.downloader4vsco"
         minSdk = 24
         targetSdk = 36
-        versionCode = 98
-        versionName = "3.2.2"
+        versionCode = 100
+        versionName = "3.2.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -63,5 +63,5 @@ dependencies {
     implementation(libs.glide)
 
     implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation("com.google.android.play:review-ktx:2.0.2")
+    implementation(libs.review.ktx)
 }

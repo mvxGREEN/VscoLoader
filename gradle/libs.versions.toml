@@ -13,6 +13,7 @@ appcompat = "1.7.1"
 material = "1.13.0"
 okhttp = "5.3.2"
 playServicesAds = "24.9.0"
+reviewKtx = "2.0.2"
 userMessagingPlatform = "4.0.0"
 lifecycleRuntimeKtx = "2.10.0"
 
@@ -29,6 +30,7 @@ androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
 okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 play-services-ads = { module = "com.google.android.gms:play-services-ads", version.ref = "playServicesAds" }
+review-ktx = { module = "com.google.android.play:review-ktx", version.ref = "reviewKtx" }
 user-messaging-platform = { module = "com.google.android.ump:user-messaging-platform", version.ref = "userMessagingPlatform" }
 androidx-lifecycle-runtime-ktx = { module = "androidx.lifecycle:lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
 

@@ -45,7 +45,7 @@ class DownloadReceiver : BroadcastReceiver() {
             else if (VscoLoader.mCountChunksFinal > 0 && VscoLoader.mCountChunks < VscoLoader.mCountChunksFinal) {
                 handleChunkDownload(context)
             }
-            // Case 3 (MISSING): Standard File (Image/Video) finished
+            // Case 3: Standard File (Image/Video) finished
             else {
                 handleStandardDownload(context)
             }

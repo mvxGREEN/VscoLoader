@@ -190,6 +190,18 @@
             android:layout_height="wrap_content"
             android:padding="16dp">
 
+            <ImageButton
+                android:id="@+id/btnAction"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:elevation="8dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_download"
+                app:tint="@color/text_primary"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent" />
+
             <TextView
                 android:id="@+id/tvTitle"
                 android:layout_width="0dp"
@@ -200,8 +212,9 @@
                 android:textStyle="bold"
                 android:ellipsize="end"
                 android:maxLines="1"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintEnd_toStartOf="@+id/btnAction"
+                android:layout_marginHorizontal="16dp"
+                app:layout_constraintStart_toEndOf="@id/btnAction"
+                app:layout_constraintEnd_toStartOf="@id/btnShare"
                 app:layout_constraintTop_toTopOf="parent"
                 app:layout_constraintBottom_toTopOf="@+id/tvSubtitle"
                 app:layout_constraintVertical_chainStyle="packed"/>
@@ -214,18 +227,19 @@
                 android:textColor="@color/text_secondary"
                 android:textSize="14sp"
                 android:layout_marginTop="2dp"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintEnd_toStartOf="@+id/btnAction"
+                android:layout_marginHorizontal="16dp"
+                app:layout_constraintStart_toEndOf="@id/btnAction"
+                app:layout_constraintEnd_toStartOf="@id/btnShare"
                 app:layout_constraintTop_toBottomOf="@+id/tvTitle"
                 app:layout_constraintBottom_toBottomOf="parent"/>
 
             <ImageButton
-                android:id="@+id/btnAction"
+                android:id="@+id/btnShare"
                 android:layout_width="48dp"
                 android:layout_height="48dp"
                 android:elevation="8dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@drawable/ic_download"
+                android:src="@drawable/ic_share_40px"
                 app:tint="@color/text_primary"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintTop_toTopOf="parent"

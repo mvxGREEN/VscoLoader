@@ -60,17 +60,15 @@ object VscoLoader {
     var isCancelled = false
 
     fun resetVars() {
-        // When we start fresh, ensure we are NOT cancelled
         isCancelled = false
-
         mMediaUrls.clear()
         mChunkUrls.clear()
         mTitle = ""
         isProfile = false
         isCollection = false
         mM3uUrl = ""
+        mFilePath = "" // ADD THIS LINE
 
-        // Reset counters
         totalItems = 0
         completedItems = 0
         DownloadReceiver.reset()
