@@ -129,6 +129,8 @@ class MainActivity : AppCompatActivity() {
             Log.d("MainActivity", "Download finished broadcast received")
             updateUI(UIState.FINISHED)
 
+            incrementSuccessfulRuns()
+
             // Check if this session was single & initiated via Share
             if (VscoLoader.isShared && !VscoLoader.isProfile && !VscoLoader.isCollection) {
                 Toast.makeText(context, "Saved!", Toast.LENGTH_LONG).show()
@@ -432,11 +434,13 @@ class MainActivity : AppCompatActivity() {
         val adRequest = AdRequest.Builder().build()
         InterstitialAd.load(this, interstitialId, adRequest, object : InterstitialAdLoadCallback() {
             override fun onAdFailedToLoad(adError: LoadAdError) {
+                Log.e("vscoloader_interstitial_fail", "failed to load interstitial ad")
                 logEvent("vs_interstitial_fail", "", "Code: ${adError.code} | Message: ${adError.message}")
                 mInterstitialAd = null
                 isAdLoading = false
             }
             override fun onAdLoaded(interstitialAd: InterstitialAd) {
+                Log.i("VscoLoader", "loaded interstital ad")
                 mInterstitialAd = interstitialAd
                 isAdLoading = false
                 mInterstitialAd?.fullScreenContentCallback = object : FullScreenContentCallback() {
@@ -473,12 +477,9 @@ class MainActivity : AppCompatActivity() {
         Log.i("MainActivity", "Successful Runs: $currentCount")
 
         // 2. Check if multiple of 4
-        if (currentCount > 0 && currentCount % 4 == 0) {
-            val isGold = prefs.getBoolean("IS_GOLD", false)
-            if (!isGold) {
-                Log.i("VscoLoader", "showing interstitial...")
-                showInterstitial()
-            }
+        if (currentCount % 4 == 0) {
+            // show interstitial ad
+            showInterstitial()
         }
     }
 
@@ -635,7 +636,7 @@ class MainActivity : AppCompatActivity() {
                 Log.d("MainActivity", "Link loading in webview: $url")
                 loadMediaData(url)
             }
-        }, 300)
+        }, 600)
     }
 
     private fun loadInWebView(url: String) {
@@ -949,7 +950,7 @@ class MainActivity : AppCompatActivity() {
                 binding.btnAction.setImageResource(R.drawable.ic_download)
                 binding.btnShare.visibility = View.INVISIBLE
 
-                incrementSuccessfulRuns()
+
             }
             UIState.DOWNLOADING -> {
                 binding.overlayDownloading.visibility = View.VISIBLE
@@ -1159,9 +1160,6 @@ class MainActivity : AppCompatActivity() {
                 binding.etMainInput.removeTextChangedListener(textWatcher)
                 binding.etMainInput.setText(sharedText)
                 binding.etMainInput.addTextChangedListener(textWatcher)
-
-                // check whether to show ad
-                //incrementSuccessfulRuns()
 
                 // Manual Trigger (Only one download starts)
                 handleInput(sharedText)
