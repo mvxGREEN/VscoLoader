@@ -177,7 +177,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             // --- CHAIN REACTION: NOW REQUEST BATTERY ---
-            requestBatteryOptimization()
+            //requestBatteryOptimization()
         }
 
         requestWritePermissionLauncher = registerForActivityResult(
