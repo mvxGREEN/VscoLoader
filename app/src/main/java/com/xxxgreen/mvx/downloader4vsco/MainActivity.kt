@@ -26,6 +26,8 @@ import androidx.core.content.ContextCompat
 import com.android.billingclient.api.*
 import com.bumptech.glide.Glide
 import com.google.android.gms.ads.*
+import com.google.android.gms.ads.interstitial.InterstitialAd
+import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
 import com.google.android.play.core.review.ReviewManagerFactory
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.xxxgreen.mvx.downloader4vsco.databinding.ActivityMainBinding
@@ -37,9 +39,16 @@ import java.io.File
 import java.util.regex.Pattern
 
 class MainActivity : AppCompatActivity() {
-    private val bannerIdTest = "ca-app-pub-3940256099942544/6300978111" // Test ID
-    private val bannerIdReal = "ca-app-pub-7417392682402637/1939309490" // Real ID
-    private val bannerId = bannerIdTest
+    private val interstitialIdTest = "ca-app-pub-3940256099942544/1033173712"
+    private val interstitialIdReal = "ca-app-pub-7417392682402637/3359673540"
+    //private val bannerIdTest = "ca-app-pub-3940256099942544/6300978111" // Test ID
+    //private val bannerIdReal = "ca-app-pub-7417392682402637/1939309490" // Real ID
+    //private val bannerId = bannerIdTest
+    private val interstitialId = interstitialIdTest
+
+    private var mInterstitialAd: InterstitialAd? = null
+    private var isAdLoading = false
+
     private lateinit var firebaseAnalytics: FirebaseAnalytics
 
     private val PREFS_NAME = "VscoLoaderPrefs"
@@ -133,7 +142,7 @@ class MainActivity : AppCompatActivity() {
                 // Delay slightly to let the user see the success message, then close
                 Handler(Looper.getMainLooper()).postDelayed({
                     finish() // Closes the app and removes from recents (optional) or just finish()
-                }, 1000)
+                }, 333)
             } else {
                 Toast.makeText(context, "Saved!", Toast.LENGTH_SHORT).show()
             }
@@ -215,6 +224,8 @@ class MainActivity : AppCompatActivity() {
 
         // Initial State
         updateUI(UIState.EMPTY)
+
+        // check for shared url
         checkIntent(intent)
     }
 
@@ -415,7 +426,42 @@ class MainActivity : AppCompatActivity() {
         Log.d("Analytics", "Logged event: $eventName with value: $inputValue")
     }
 
-    // --- UPGRADE DIALOG (WITH BINDING) ---
+    private fun loadInterstitialAd() {
+        if (isAdLoading || mInterstitialAd != null) return
+        isAdLoading = true
+        val adRequest = AdRequest.Builder().build()
+        InterstitialAd.load(this, interstitialId, adRequest, object : InterstitialAdLoadCallback() {
+            override fun onAdFailedToLoad(adError: LoadAdError) {
+                logEvent("vs_interstitial_fail", "", "Code: ${adError.code} | Message: ${adError.message}")
+                mInterstitialAd = null
+                isAdLoading = false
+            }
+            override fun onAdLoaded(interstitialAd: InterstitialAd) {
+                mInterstitialAd = interstitialAd
+                isAdLoading = false
+                mInterstitialAd?.fullScreenContentCallback = object : FullScreenContentCallback() {
+                    override fun onAdDismissedFullScreenContent() { mInterstitialAd = null; loadInterstitialAd() }
+                    override fun onAdFailedToShowFullScreenContent(adError: AdError) { mInterstitialAd = null }
+                    override fun onAdShowedFullScreenContent() { mInterstitialAd = null }
+                }
+            }
+        })
+    }
+
+    private fun logEvent(eventName: String, input_url: String?, more: String?) {
+        val bundle = Bundle()
+        if (input_url != null) bundle.putString("input_url", input_url)
+        if (more != null) bundle.putString("more", more)
+        firebaseAnalytics.logEvent(eventName, bundle)
+        Log.d("Analytics", "Logged event: $eventName")
+    }
+
+    private fun showInterstitial() {
+        val prefs = getSharedPreferences("com.xxxgreen.mvx.prefs", Context.MODE_PRIVATE)
+        if (!prefs.getBoolean("IS_GOLD", false)) {
+            mInterstitialAd?.show(this) ?: loadInterstitialAd()
+        }
+    }
 
     private fun incrementSuccessfulRuns() {
         val prefs = getSharedPreferences("com.xxxgreen.mvx.prefs", Context.MODE_PRIVATE)
@@ -424,22 +470,14 @@ class MainActivity : AppCompatActivity() {
         val currentCount = prefs.getInt("SUCCESS_RUNS", 0) + 1
         prefs.edit().putInt("SUCCESS_RUNS", currentCount).apply()
 
-        Log.d("MainActivity", "Successful Runs: $currentCount")
+        Log.i("MainActivity", "Successful Runs: $currentCount")
 
-        // 2. Check if multiple of 6
-        if (currentCount > 0 && currentCount % 6 == 0) {
-            val cycle = currentCount / 6
-
-            // Odd cycles (1, 3, 5... -> runs 6, 18, 30): Show Upgrade
-            // Even cycles (2, 4, 6... -> runs 12, 24, 36): Show Rate
-            if (cycle % 2 != 0) {
-                // Check if user is already Gold before annoying them with Upgrade dialog
-                val isGold = prefs.getBoolean("IS_GOLD", false)
-                if (!isGold && !VscoLoader.isShared) {
-                    showUpgradeDialog()
-                }
-            } else if (!VscoLoader.isShared) {
-                showRateDialog()
+        // 2. Check if multiple of 4
+        if (currentCount > 0 && currentCount % 4 == 0) {
+            val isGold = prefs.getBoolean("IS_GOLD", false)
+            if (!isGold) {
+                Log.i("VscoLoader", "showing interstitial...")
+                showInterstitial()
             }
         }
     }
@@ -609,6 +647,7 @@ class MainActivity : AppCompatActivity() {
     private var lastLoadedMediaId: String? = null
 
     fun onShortlinkResolved(resolvedUrl: String) {
+        Log.i("VscoLoader", "onShortlinkResolved: $resolvedUrl")
         val mediaId = extractMediaId(resolvedUrl)
 
         // GUARD CLAUSE: If we just loaded this ID, stop here.
@@ -764,6 +803,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadMediaData(url: String) {
+        Log.i("VscoLoader", "loadMediaData: $url")
         // Cancel any previous jobs (important for rapid pasting)
         fetchJob?.cancel()
 
@@ -818,12 +858,14 @@ class MainActivity : AppCompatActivity() {
                             // --- FIX START ---
                             // Prevent the "Double Update" bug.
                             // If we are auto-downloading, skip PREVIEW and go straight to DOWNLOADING.
-                            if (VscoLoader.isShared) {
-                                startDownloadService() // This triggers updateUI(DOWNLOADING)
-                            } else {
-                                updateUI(UIState.PREVIEW) // This triggers updateUI(PREVIEW)
-                            }
+                            //if (VscoLoader.isShared) {
+                            //    startDownloadService() // This triggers updateUI(DOWNLOADING)
+                            //} else {
+                            //    updateUI(UIState.PREVIEW) // This triggers updateUI(PREVIEW)
+                            //}
                             // --- FIX END ---
+                            // TODO clean up
+                            updateUI(UIState.PREVIEW)
 
                         } else {
                             Toast.makeText(this@MainActivity, "No media found", Toast.LENGTH_SHORT).show()
@@ -906,6 +948,8 @@ class MainActivity : AppCompatActivity() {
                 binding.btnAction.isEnabled = true
                 binding.btnAction.setImageResource(R.drawable.ic_download)
                 binding.btnShare.visibility = View.INVISIBLE
+
+                incrementSuccessfulRuns()
             }
             UIState.DOWNLOADING -> {
                 binding.overlayDownloading.visibility = View.VISIBLE
@@ -922,7 +966,7 @@ class MainActivity : AppCompatActivity() {
 
                 // You can remove the old "download_finished" call if you want
                 // to strictly use "vl_ui_finish" now.
-                incrementSuccessfulRuns()
+                //incrementSuccessfulRuns()
             }
         }
 
@@ -1092,6 +1136,9 @@ class MainActivity : AppCompatActivity() {
                 Log.d("AdMobBanner", "XML Ad Loaded")
             }
         }
+
+        // load initial interstitial
+        loadInterstitialAd()
     }
 
     // Since launchMode is singleInstance, new shares will call this if app is already open
@@ -1113,7 +1160,10 @@ class MainActivity : AppCompatActivity() {
                 binding.etMainInput.setText(sharedText)
                 binding.etMainInput.addTextChangedListener(textWatcher)
 
-                // 4. Manual Trigger (Only one download starts)
+                // check whether to show ad
+                //incrementSuccessfulRuns()
+
+                // Manual Trigger (Only one download starts)
                 handleInput(sharedText)
             }
         }
