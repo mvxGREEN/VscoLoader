@@ -156,7 +156,7 @@ class MainActivity : AppCompatActivity() {
 
         // NUKE old state
         VscoLoader.resetVars()
-        VscoLoader.isShared = false
+        VscoLoader.isShared = false 
 
         // 2. Inflate Layout via Binding
         binding = ActivityMainBinding.inflate(layoutInflater)
