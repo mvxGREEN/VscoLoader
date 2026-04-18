@@ -1,7 +1,5 @@
 plugins {
     alias(libs.plugins.android.application)
-    id("com.google.gms.google-services")
-    id("com.google.firebase.crashlytics")
 }
 
 android {
@@ -47,21 +45,7 @@ dependencies {
     // HTML Parsing (Replaces AngleSharp)
     implementation(libs.jsoup)
 
-    // Firebase & Ads
-    implementation(platform(libs.firebase.bom))
-    implementation(libs.firebase.analytics)
-    implementation(libs.play.services.ads)
-    implementation(libs.user.messaging.platform)
-    implementation(libs.firebase.crashlytics)
-
-    // Billing
-    implementation(libs.billing)
-
-    // HTTP (Standard for Android)
     implementation(libs.okhttp)
-
     implementation(libs.glide)
-
     implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation(libs.review.ktx)
 }

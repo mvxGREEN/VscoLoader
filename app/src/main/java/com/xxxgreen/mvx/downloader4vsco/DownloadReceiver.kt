@@ -5,7 +5,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
-import com.google.firebase.analytics.FirebaseAnalytics
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -111,8 +110,6 @@ class DownloadReceiver : BroadcastReceiver() {
 
                 // NEW: Check for failure
                 if (resultPath.isEmpty()) {
-                    val firebase = FirebaseAnalytics.getInstance(context)
-                    firebase.logEvent("vl_error_concat", null)
                     Log.e(TAG, "Concatenation failed, logged event.")
                     return@launch // Stop processing
                 }

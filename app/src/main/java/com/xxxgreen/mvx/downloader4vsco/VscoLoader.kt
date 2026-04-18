@@ -6,10 +6,8 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Environment
 import android.util.Log
-import android.webkit.CookieManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.File
 import java.io.FileOutputStream

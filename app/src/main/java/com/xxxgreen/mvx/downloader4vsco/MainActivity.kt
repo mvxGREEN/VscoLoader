@@ -3,11 +3,8 @@ package com.xxxgreen.mvx.downloader4vsco
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.*
 import android.content.pm.PackageManager
-import android.graphics.Color
-import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -23,37 +20,14 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import com.android.billingclient.api.*
 import com.bumptech.glide.Glide
-import com.google.android.gms.ads.*
-import com.google.android.gms.ads.interstitial.InterstitialAd
-import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
-import com.google.android.play.core.review.ReviewManagerFactory
-import com.google.firebase.analytics.FirebaseAnalytics
 import com.xxxgreen.mvx.downloader4vsco.databinding.ActivityMainBinding
-import com.xxxgreen.mvx.downloader4vsco.databinding.DialogRateBinding
-import com.xxxgreen.mvx.downloader4vsco.databinding.DialogUpgradeBinding
 import kotlinx.coroutines.*
 import org.jsoup.Jsoup
 import java.io.File
 import java.util.regex.Pattern
 
 class MainActivity : AppCompatActivity() {
-    private val interstitialIdTest = "ca-app-pub-3940256099942544/1033173712"
-    private val interstitialIdReal = "ca-app-pub-7417392682402637/3359673540"
-    //private val bannerIdTest = "ca-app-pub-3940256099942544/6300978111" // Test ID
-    //private val bannerIdReal = "ca-app-pub-7417392682402637/1939309490" // Real ID
-    //private val bannerId = bannerIdTest
-    private val interstitialId = interstitialIdTest
-
-    private var mInterstitialAd: InterstitialAd? = null
-    private var isAdLoading = false
-
-    private lateinit var firebaseAnalytics: FirebaseAnalytics
-
-    private val PREFS_NAME = "VscoLoaderPrefs"
-    private val KEY_APP_OPEN_COUNT = "AppOpenCount"
-
     private lateinit var binding: ActivityMainBinding
     private var fetchJob: Job? = null
 
@@ -63,11 +37,6 @@ class MainActivity : AppCompatActivity() {
     // Logic Variables
     private val VALID_INPUT_REGEX = Pattern.compile("^$|((?:vsco\\.)|(?:vs\\.)?co\\/)", Pattern.CASE_INSENSITIVE)
     private var currentState: UIState = UIState.EMPTY
-
-    // Billing Variables
-    private lateinit var billingClient: BillingClient
-    private var productDetails: ProductDetails? = null
-    private val PRODUCT_ID = "vscoloader_gold"
 
     private var lastLoadedUrl = ""
 
@@ -129,8 +98,6 @@ class MainActivity : AppCompatActivity() {
             Log.d("MainActivity", "Download finished broadcast received")
             updateUI(UIState.FINISHED)
 
-            incrementSuccessfulRuns()
-
             // Check if this session was single & initiated via Share
             if (VscoLoader.isShared && !VscoLoader.isProfile && !VscoLoader.isCollection) {
                 Toast.makeText(context, "Saved!", Toast.LENGTH_LONG).show()
@@ -161,9 +128,6 @@ class MainActivity : AppCompatActivity() {
         // 2. Inflate Layout via Binding
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-
-        // 2. Initialize Firebase
-        firebaseAnalytics = FirebaseAnalytics.getInstance(this)
 
         // --- 1. INITIALIZE PERMISSION LAUNCHER ---
         requestNotificationLauncher = registerForActivityResult(
@@ -198,17 +162,10 @@ class MainActivity : AppCompatActivity() {
        setupListeners()
         VscoLoader.prepareFileDirs()
 
-        // Billing & Ads
-        setupBilling()
-        val prefs = getSharedPreferences("com.xxxgreen.mvx.prefs", Context.MODE_PRIVATE)
-        val isGold = prefs.getBoolean("IS_GOLD", false)
-        checkSubscriptionAndLoadAds(isGold)
-
         // check permissions
         startBackgroundPermissionChain()
 
         // Setup Toolbar
-        updateUpgradeIcon(isGold)
         setupToolbarMenu()
 
         // Setup Webview
@@ -395,10 +352,6 @@ class MainActivity : AppCompatActivity() {
     private fun setupToolbarMenu() {
         binding.toolbar.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
-                R.id.action_upgrade -> {
-                    showUpgradeDialog()
-                    true
-                }
                 R.id.action_privacy -> {
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://mobileapps.green/privacy-policy"))
                     startActivity(intent)
@@ -419,127 +372,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun logInputEvent(eventName: String) {
-        val inputValue = binding.etMainInput.text.toString()
-        val bundle = Bundle().apply {
-            putString("input_value", inputValue)
-        }
-        firebaseAnalytics.logEvent(eventName, bundle)
-        Log.d("Analytics", "Logged event: $eventName with value: $inputValue")
-    }
-
-    private fun loadInterstitialAd() {
-        if (isAdLoading || mInterstitialAd != null) return
-        isAdLoading = true
-        val adRequest = AdRequest.Builder().build()
-        InterstitialAd.load(this, interstitialId, adRequest, object : InterstitialAdLoadCallback() {
-            override fun onAdFailedToLoad(adError: LoadAdError) {
-                Log.e("vscoloader_interstitial_fail", "failed to load interstitial ad")
-                logEvent("vs_interstitial_fail", "", "Code: ${adError.code} | Message: ${adError.message}")
-                mInterstitialAd = null
-                isAdLoading = false
-            }
-            override fun onAdLoaded(interstitialAd: InterstitialAd) {
-                Log.i("VscoLoader", "loaded interstital ad")
-                mInterstitialAd = interstitialAd
-                isAdLoading = false
-                mInterstitialAd?.fullScreenContentCallback = object : FullScreenContentCallback() {
-                    override fun onAdDismissedFullScreenContent() { mInterstitialAd = null; loadInterstitialAd() }
-                    override fun onAdFailedToShowFullScreenContent(adError: AdError) { mInterstitialAd = null }
-                    override fun onAdShowedFullScreenContent() { mInterstitialAd = null }
-                }
-            }
-        })
-    }
-
-    private fun logEvent(eventName: String, input_url: String?, more: String?) {
-        val bundle = Bundle()
-        if (input_url != null) bundle.putString("input_url", input_url)
-        if (more != null) bundle.putString("more", more)
-        firebaseAnalytics.logEvent(eventName, bundle)
-        Log.d("Analytics", "Logged event: $eventName")
-    }
-
-    private fun showInterstitial() {
-        val prefs = getSharedPreferences("com.xxxgreen.mvx.prefs", Context.MODE_PRIVATE)
-        if (!prefs.getBoolean("IS_GOLD", false)) {
-            mInterstitialAd?.show(this) ?: loadInterstitialAd()
-        }
-    }
-
-    private fun incrementSuccessfulRuns() {
-        val prefs = getSharedPreferences("com.xxxgreen.mvx.prefs", Context.MODE_PRIVATE)
-
-        // 1. Increment Counter
-        val currentCount = prefs.getInt("SUCCESS_RUNS", 0) + 1
-        prefs.edit().putInt("SUCCESS_RUNS", currentCount).apply()
-
-        Log.i("MainActivity", "Successful Runs: $currentCount")
-
-        // 2. Check if multiple of 4
-        if (currentCount % 4 == 0) {
-            // show interstitial ad
-            showInterstitial()
-        }
-    }
-
-    private fun showRateDialog() {
-        // Inflate the Rate Dialog layout
-        val rateBinding = DialogRateBinding.inflate(layoutInflater)
-
-        val builder = AlertDialog.Builder(this)
-            .setView(rateBinding.root)
-            .setCancelable(true)
-
-        val dialog = builder.create()
-        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-
-        // "Nah" Button -> Dismiss
-        rateBinding.btnNah.setOnClickListener {
-            dialog.dismiss()
-        }
-
-        // "Rate" Button (ID is btnUpgrade in your xml) -> Open Play Store
-        rateBinding.btnUpgrade.setOnClickListener {
-            dialog.dismiss()
-            try {
-                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$packageName")))
-            } catch (e: ActivityNotFoundException) {
-                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$packageName")))
-            }
-        }
-
-        dialog.show()
-    }
-
-    private fun showUpgradeDialog() {
-        // Inflate the Dialog layout using Binding
-        val dialogBinding = DialogUpgradeBinding.inflate(layoutInflater)
-
-        val builder = AlertDialog.Builder(this)
-            .setView(dialogBinding.root)
-            .setCancelable(true)
-
-        val dialog = builder.create()
-        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-
-        // Bind Dialog Listeners directly
-        //dialogBinding.btnClose.setOnClickListener { dialog.dismiss() }
-        dialogBinding.btnNah.setOnClickListener { dialog.dismiss() }
-        dialogBinding.btnUpgrade.setOnClickListener {
-            dialog.dismiss()
-            launchBillingFlow()
-        }
-
-        dialog.show()
-    }
-
     // --- LOGIC & UI UPDATES ---
 
     private fun handleInput(rawInput: String) {
-        // 1. LOG ANALYTICS (Add this line)
-        logInputEvent("handle_input")
-
         // cancels any delayed UI triggers
         inputHandler.removeCallbacksAndMessages(null)
 
@@ -602,12 +437,6 @@ class MainActivity : AppCompatActivity() {
 
             // Collection
             if (url.contains("/collection")) {
-                if (!isGold) {
-                    binding.etMainInput.setText("")
-                    showUpgradeDialog()
-                    updateUI(UIState.EMPTY) // Reset if failed
-                    return@postDelayed
-                }
                 VscoLoader.isCollection = true
                 val username = VscoLoader.extractUsernameFromUrl(url)
                 if (username.isNotEmpty()) VscoLoader.mTitle = username
@@ -616,12 +445,6 @@ class MainActivity : AppCompatActivity() {
             }
             // Profile
             else if (!url.contains("/media") && !url.contains("/video") && !url.contains("vs.co")) {
-                if (!isGold) {
-                    binding.etMainInput.setText("")
-                    showUpgradeDialog()
-                    updateUI(UIState.EMPTY) // Reset if failed
-                    return@postDelayed
-                }
                 VscoLoader.isProfile = true
                 val username = VscoLoader.extractUsernameFromUrl(url)
                 if (username.isNotEmpty()) VscoLoader.mTitle = username
@@ -711,20 +534,6 @@ class MainActivity : AppCompatActivity() {
 
                 if (url.contains("medias/profile") || url.contains("medias/videos")) {
                     Log.d("MainActivity", "Intercepted API: $url")
-
-                    val prefs = getSharedPreferences("com.xxxgreen.mvx.prefs", Context.MODE_PRIVATE)
-                    val isGold = prefs.getBoolean("IS_GOLD", false)
-
-                    if (!isGold) {
-                        Log.d("MainActivity", "Blocked Profile Download (Non-Gold)")
-                        // Stop Loading and Show Dialog
-                        runOnUiThread {
-                            updateUI(UIState.EMPTY)
-                            showUpgradeDialog()
-                        }
-                        // Return without starting the fetch job
-                        return super.shouldInterceptRequest(view, request)
-                    }
 
                     val headers = request?.requestHeaders ?: emptyMap()
                     val cookie = CookieManager.getInstance().getCookie(url) ?: ""
@@ -915,11 +724,6 @@ class MainActivity : AppCompatActivity() {
             UIState.EMPTY -> null // Usually no need to log empty/reset state
         }
 
-        eventName?.let {
-            firebaseAnalytics.logEvent(it, null)
-            Log.d("Analytics", "Logged UI Event: $it")
-        }
-
         // --- Rest of your existing UI logic ---
         binding.etMainInput.isEnabled = true
         binding.btnPaste.isEnabled = true
@@ -977,171 +781,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // --- BILLING LOGIC ---
-
-    private fun setupBilling() {
-        billingClient = BillingClient.newBuilder(this)
-            .setListener(purchasesUpdatedListener)
-            .enablePendingPurchases(
-                PendingPurchasesParams.newBuilder()
-                    .enableOneTimeProducts()
-                    .build()
-            )
-            .build()
-        startBillingConnection()
-    }
-
-    private fun startBillingConnection() {
-        billingClient.startConnection(object : BillingClientStateListener {
-            override fun onBillingSetupFinished(billingResult: BillingResult) {
-                if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
-                    queryProductDetails()
-                    queryActivePurchases()
-                }
-            }
-            override fun onBillingServiceDisconnected() { }
-        })
-    }
-
-    private fun queryProductDetails() {
-        val productList = listOf(
-            QueryProductDetailsParams.Product.newBuilder()
-                .setProductId(PRODUCT_ID)
-                .setProductType(BillingClient.ProductType.SUBS)
-                .build()
-        )
-        billingClient.queryProductDetailsAsync(
-            QueryProductDetailsParams.newBuilder().setProductList(productList).build()
-        ) { billingResult, detailsResult ->
-            if (billingResult.responseCode == BillingClient.BillingResponseCode.OK
-                && detailsResult.productDetailsList.isNotEmpty()
-            ) {
-                productDetails = detailsResult.productDetailsList[0]
-            }
-        }
-    }
-
-    private fun queryActivePurchases() {
-        val params = QueryPurchasesParams.newBuilder()
-            .setProductType(BillingClient.ProductType.SUBS)
-            .build()
-        billingClient.queryPurchasesAsync(params) { billingResult, purchases ->
-            if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
-                var isGold = false
-                for (purchase in purchases) {
-                    if (purchase.products.contains(PRODUCT_ID) && purchase.purchaseState == Purchase.PurchaseState.PURCHASED) {
-                        isGold = true
-                        if (!purchase.isAcknowledged) handlePurchase(purchase)
-                    }
-                }
-                saveGoldStatus(isGold)
-            }
-        }
-    }
-
-    private val purchasesUpdatedListener = PurchasesUpdatedListener { billingResult, purchases ->
-        if (billingResult.responseCode == BillingClient.BillingResponseCode.OK && purchases != null) {
-            for (purchase in purchases) handlePurchase(purchase)
-        }
-    }
-
-    private fun handlePurchase(purchase: Purchase) {
-        if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED) {
-            if (!purchase.isAcknowledged) {
-                val acknowledgePurchaseParams = AcknowledgePurchaseParams.newBuilder()
-                    .setPurchaseToken(purchase.purchaseToken)
-                    .build()
-
-                billingClient.acknowledgePurchase(acknowledgePurchaseParams) { billingResult ->
-                    if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
-                        runOnUiThread {
-                            Toast.makeText(this, "Thanks for your support <3", Toast.LENGTH_SHORT).show()
-                            saveGoldStatus(true)
-                            updateUpgradeIcon(true)
-                            binding.adView.visibility = View.GONE
-                            recreate()
-                        }
-                    }
-                }
-            } else {
-                saveGoldStatus(true)
-            }
-        }
-    }
-
-    private fun saveGoldStatus(isGold: Boolean) {
-        val prefs = getSharedPreferences("com.xxxgreen.mvx.prefs", Context.MODE_PRIVATE)
-        prefs.edit().putBoolean("IS_GOLD", isGold).apply()
-        checkSubscriptionAndLoadAds(isGold)
-        runOnUiThread { updateUpgradeIcon(isGold) }
-    }
-
-    private fun checkSubscriptionAndLoadAds(isGold: Boolean) {
-        if (!isGold) {
-            // Load Ads if NOT gold
-            initAdMob()
-        } else {
-            // Hide Ads if Gold
-            binding.adView.visibility = View.GONE
-            //mInterstitialAd = null
-        }
-    }
-
-    private fun launchBillingFlow() {
-        if (productDetails != null) {
-            val offerToken = productDetails!!.subscriptionOfferDetails?.get(0)?.offerToken ?: ""
-            val productDetailsParamsList = listOf(
-                BillingFlowParams.ProductDetailsParams.newBuilder()
-                    .setProductDetails(productDetails!!)
-                    .setOfferToken(offerToken)
-                    .build()
-            )
-            val billingFlowParams = BillingFlowParams.newBuilder()
-                .setProductDetailsParamsList(productDetailsParamsList)
-                .build()
-            billingClient.launchBillingFlow(this, billingFlowParams)
-        } else {
-            Toast.makeText(this, "Billing not ready yet.", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private fun updateUpgradeIcon(isGold: Boolean) {
-        val upgradeItem = binding.toolbar.menu.findItem(R.id.action_upgrade)
-        if (upgradeItem != null) {
-            if (isGold) {
-                upgradeItem.icon?.setTint(Color.parseColor("#FFD700"))
-                upgradeItem.isEnabled = false
-            } else {
-                upgradeItem.icon?.setTintList(null)
-                upgradeItem.isEnabled = true
-            }
-        }
-    }
-
-    private fun initAdMob() {
-        MobileAds.initialize(this) {}
-
-        // Ensure the view is visible
-        binding.adView.visibility = View.VISIBLE
-
-        // Load the ad defined in XML
-        val adRequest = AdRequest.Builder().build()
-        binding.adView.loadAd(adRequest)
-
-        // Log for confirmation
-        binding.adView.adListener = object : AdListener() {
-            override fun onAdFailedToLoad(error: LoadAdError) {
-                Log.e("AdMobBanner", "XML Load Failed: ${error.message}")
-            }
-            override fun onAdLoaded() {
-                Log.d("AdMobBanner", "XML Ad Loaded")
-            }
-        }
-
-        // load initial interstitial
-        loadInterstitialAd()
-    }
-
     // Since launchMode is singleInstance, new shares will call this if app is already open
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
@@ -1165,44 +804,6 @@ class MainActivity : AppCompatActivity() {
                 handleInput(sharedText)
             }
         }
-
-        // check whether to show in-app review
-        if (!VscoLoader.isShared) {
-            checkAndShowInAppReview()
-        }
-    }
-
-    private fun checkAndShowInAppReview() {
-        val sharedPrefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val currentCount = sharedPrefs.getInt(KEY_APP_OPEN_COUNT, 0) + 1
-
-        // Save the new count immediately
-        sharedPrefs.edit().putInt(KEY_APP_OPEN_COUNT, currentCount).apply()
-
-        Log.d("MainActivity", "App Open Count: $currentCount")
-
-        // Trigger only on the 3rd open
-        if (currentCount == 3) {
-            val manager = ReviewManagerFactory.create(this)
-            val request = manager.requestReviewFlow()
-
-            request.addOnCompleteListener { task ->
-                if (task.isSuccessful) {
-                    // We got the ReviewInfo object
-                    val reviewInfo = task.result
-                    val flow = manager.launchReviewFlow(this, reviewInfo)
-                    flow.addOnCompleteListener { _ ->
-                        // The flow has finished. The API does not indicate whether the user
-                        // reviewed or not, or even if the review dialog was shown.
-                        // Thus, no matter the result, we continue our app flow.
-                        Log.d("MainActivity", "In-App Review flow completed")
-                    }
-                } else {
-                    // There was some problem, log or handle the error code.
-                    Log.e("MainActivity", "Review info request failed", task.exception)
-                }
-            }
-        }
     }
 
     private fun shareDownloadedFile() {
@@ -1224,8 +825,6 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 startActivity(Intent.createChooser(shareIntent, "Share to..."))
-                logInputEvent("vl_action_share") // Optional: log that they shared
-
             } catch (e: Exception) {
                 Log.e("MainActivity", "Error sharing file", e)
                 Toast.makeText(this, "Unable to share file.", Toast.LENGTH_SHORT).show()
@@ -1255,7 +854,7 @@ class MainActivity : AppCompatActivity() {
             putString("error_message", error.message ?: "Unknown error")
             putString("error_class", error.javaClass.simpleName)
         }
-        firebaseAnalytics.logEvent(eventName, bundle)
+        //firebaseAnalytics.logEvent(eventName, bundle)
         Log.e("Analytics", "Logged Error: $eventName", error)
     }
 
