@@ -9,7 +9,7 @@ A simple Android application for downloading photos, videos, profiles and collec
 
 ## ✨ Features
 * **Direct Downloads**: Download VSCO images or videos directly to your Android device's local storage.
-* **URL-to-MP4**: Simply copy and paste the URL of the target media, or click "Share" and share it to VscoLoader, to download VSCO media to Android device.
+* **URL-to-MP4**: Simply copy and paste the URL of the target media, or click "Share" and share it to VscoLoader, to download VSCO media.
 * **Kotlin**: Written in Kotlin, leveraging modern language features for a safe and concise codebase.
 * **Gradle**: Utilizes Gradle Kotlin DSL (`*.gradle.kts`) for build scripts, ensuring better type safety and seamless IDE support.
 
