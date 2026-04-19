@@ -18,13 +18,21 @@ A simple Android application for downloading photos, videos, profiles and collec
 * **Platform**: Android SDK
 * **Build Tool**: Gradle (Kotlin DSL)
 
-## 🚀 Getting Started
+## ⚡️ Quick Start App
 
-To get a local copy up and running, follow these simple steps.
+1. Download latest APK from [Releases](https://github.com/mvxGREEN/VscoLoader/releases) to an Android device.
+
+2. Open APK file to install.
+
+3. Done!  Open **VscoLoader** app to start downloading media from VSCO.
+
+## 💻 Build App from Source Code
+
+To build and run this project locally, you will need [Android Studio](https://developer.android.com/studio) installed on your machine.
 
 ### Prerequisites
 * **Android Studio**: Make sure you have the latest version of [Android Studio](https://developer.android.com/studio) installed.
-* **Android SDK**: Check the `build.gradle.kts` for specific `minSdk` and `targetSdk` configurations.
+* **NDK & CMake**: Because Chaquopy builds native Python components, ensure you have the Android NDK and CMake installed via the Android Studio SDK Manager.
 
 ### Installation & Build
 
@@ -33,8 +41,7 @@ To get a local copy up and running, follow these simple steps.
 
 2. **Open the project in Android Studio**
    * Launch Android Studio.
-   * Select **Open an existing Android Studio project**.
-   * Navigate to the cloned `VscoLoader-Android` directory and click **OK**.
+   * Navigate to the cloned directory and open it.
 
 3. **Sync Gradle**
    * Wait for Android Studio to index the files and sync the Gradle dependencies.
