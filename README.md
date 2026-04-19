@@ -1,4 +1,8 @@
-# VscoLoader 📸⬇️
+<p align="center">
+  <img src="assets/launcher_vscoloader_round.png" alt="VscoLoader App Icon" width="200"/>
+</p>
+
+# VscoLoader ⬇️
 
 [![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg)](https://github.com/mvxGREEN/VscoLoader/actions)
 [![License: WTFPL](https://img.shields.io/badge/License-WTFPL-brightgreen.svg)](http://www.wtfpl.net/about/)
@@ -17,6 +21,18 @@ A simple Android application for downloading photos, videos, profiles and collec
 * **Language**: [Kotlin](https://kotlinlang.org/)
 * **Platform**: Android SDK
 * **Build Tool**: Gradle (Kotlin DSL)
+
+* ## 📸 Screenshots
+
+<p align="center">
+  <img src="assets/Google Pixel 3 Screenshot 4.png" width="200"/>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="assets/Google Pixel 3 Screenshot 1.png" width="200"/>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="assets/Google Pixel 3 Screenshot 2.png" width="200"/>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="assets/Google Pixel Raw Screenshot 1.png" width="200"/>
+</p>
 
 ## ⚡️ Quick Start App
 
