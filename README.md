@@ -48,7 +48,7 @@ To get a local copy up and running, follow these simple steps.
 2. Paste the URL of the VSCO post you wish to download.
 3. Tap the download button and wait for the image/video to be saved to your device.
 
-*(Note: Depending on implementation, you might also be able to use the Android "Share" intent from the official VSCO app directly to VscoLoader.)*
+*(Alternatively, use the Android "Share" intent from the official VSCO app to share URL's directly to VscoLoader)*
 
 ## 🤝 Contributing
 Contributions, issues, and feature requests are welcome! 
