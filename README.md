@@ -1,6 +1,6 @@
 # VscoLoader 📸⬇️
 
-[![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg)](https://github.com/mvxGREEN/Tagger/actions)
+[![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg)](https://github.com/mvxGREEN/VscoLoader/actions)
 [![License: WTFPL](https://img.shields.io/badge/License-WTFPL-brightgreen.svg)](http://www.wtfpl.net/about/)
 [![Language: Kotlin](https://img.shields.io/badge/Language-Kotlin-purple.svg)](https://kotlinlang.org/)
 [![Platform: Android](https://img.shields.io/badge/Platform-Android-3DDC84.svg)](https://developer.android.com/)
@@ -29,7 +29,7 @@ To get a local copy up and running, follow these simple steps.
 ### Installation & Build
 
 1. **Clone the repository**
-    `git clone https://github.com/mvxGREEN/VscoLoader-Android.git`
+    `git clone https://github.com/mvxGREEN/VscoLoader.git`
 
 2. **Open the project in Android Studio**
    * Launch Android Studio.
@@ -53,7 +53,7 @@ To get a local copy up and running, follow these simple steps.
 
 ## 🤝 Contributing
 Contributions, issues, and feature requests are welcome! 
-Feel free to check the [issues page](https://github.com/mvxGREEN/VscoLoader-Android/issues) if you want to contribute. 
+Feel free to check the [issues page](https://github.com/mvxGREEN/VscoLoader/issues) if you want to contribute. 
 
 1. Fork the Project
 2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
