@@ -25,11 +25,11 @@ A simple Android application for downloading photos, videos, profiles and collec
 * ## 📸 Screenshots
 
 <p align="center">
-  <img src="assets/Google Pixel 3 Screenshot 4.png" width="200"/>
+  <img src="assets/Google Pixel 3 Screenshot 2.png" width="200"/>
   &nbsp;&nbsp;&nbsp;&nbsp;
   <img src="assets/Google Pixel 3 Screenshot 1.png" width="200"/>
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="assets/Google Pixel 3 Screenshot 2.png" width="200"/>
+  <img src="assets/Google Pixel 3 Screenshot 4.png" width="200"/>
   &nbsp;&nbsp;&nbsp;&nbsp;
   <img src="assets/Google Pixel Raw Screenshot 1.png" width="180"/>
 </p>
