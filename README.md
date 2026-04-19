@@ -31,7 +31,7 @@ A simple Android application for downloading photos, videos, profiles and collec
   &nbsp;&nbsp;&nbsp;&nbsp;
   <img src="assets/Google Pixel 3 Screenshot 2.png" width="200"/>
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="assets/Google Pixel Raw Screenshot 1.png" width="200"/>
+  <img src="assets/Google Pixel Raw Screenshot 1.png" width="180"/>
 </p>
 
 ## ⚡️ Quick Start App
