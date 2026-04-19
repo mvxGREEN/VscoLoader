@@ -5,12 +5,13 @@
 [![Language: Kotlin](https://img.shields.io/badge/Language-Kotlin-purple.svg)](https://kotlinlang.org/)
 [![Platform: Android](https://img.shields.io/badge/Platform-Android-3DDC84.svg)](https://developer.android.com/)
 
-A simple Android application for downloading photos, videos and profiles from VSCO. 
+A simple Android application for downloading photos, videos, profiles and collections from VSCO. 
 
 ## ✨ Features
-* **Direct Downloads**: Easily download your favorite VSCO images or videos directly to your Android device's local storage.
-* **Kotlin-First**: Written entirely (100%) in Kotlin, leveraging modern language features for a safe and concise codebase.
-* **Modern Build System**: Utilizes Gradle Kotlin DSL (`*.gradle.kts`) for build scripts, ensuring better type safety and seamless IDE support.
+* **Direct Downloads**: Download VSCO images or videos directly to your Android device's local storage.
+* **URL-to-MP4**: Simply copy and paste the URL of the target media, or click "Share" and share it to VscoLoader, to download VSCO media to Android device.
+* **Kotlin**: Written in Kotlin, leveraging modern language features for a safe and concise codebase.
+* **Gradle**: Utilizes Gradle Kotlin DSL (`*.gradle.kts`) for build scripts, ensuring better type safety and seamless IDE support.
 
 ## 🛠 Tech Stack
 * **Language**: [Kotlin](https://kotlinlang.org/)
