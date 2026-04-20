@@ -9,7 +9,19 @@
 [![Language: Kotlin](https://img.shields.io/badge/Language-Kotlin-purple.svg)](https://kotlinlang.org/)
 [![Platform: Android](https://img.shields.io/badge/Platform-Android-3DDC84.svg)](https://developer.android.com/)
 
-A simple Android application for downloading photos, videos, profiles and collections from VSCO. 
+A simple Android application for downloading photos, videos, profiles and collections from VSCO.
+
+## 📸 Screenshots
+
+<p align="center">
+  <img src="assets/Google Pixel 3 Screenshot 2.png" width="180"/>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="assets/Google Pixel 3 Screenshot 1.png" width="180"/>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="assets/Google Pixel 3 Screenshot 4.png" width="180"/>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="assets/Google Pixel Raw Screenshot 1.png" width="160"/>
+</p>
 
 ## ✨ Features
 * **Direct Downloads**: Download VSCO images or videos directly to your Android device's local storage.
@@ -21,18 +33,6 @@ A simple Android application for downloading photos, videos, profiles and collec
 * **Language**: [Kotlin](https://kotlinlang.org/)
 * **Platform**: Android SDK
 * **Build Tool**: Gradle (Kotlin DSL)
-
-* ## 📸 Screenshots
-
-<p align="center">
-  <img src="assets/Google Pixel 3 Screenshot 2.png" width="180"/>
-  &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="assets/Google Pixel 3 Screenshot 1.png" width="180"/>
-  &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="assets/Google Pixel 3 Screenshot 4.png" width="180"/>
-  &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="assets/Google Pixel Raw Screenshot 1.png" width="160"/>
-</p>
 
 ## ⚡️ Quick Start App
 
