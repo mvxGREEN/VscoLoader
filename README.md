@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/launcher_vscoloader_round.png" alt="VscoLoader App Icon" width="200"/>
+  <img src="assets/launcher_vscoloader_round.png" alt="VscoLoader App Icon" width="180"/>
 </p>
 
 # VscoLoader ⬇️
@@ -25,13 +25,13 @@ A simple Android application for downloading photos, videos, profiles and collec
 * ## 📸 Screenshots
 
 <p align="center">
-  <img src="assets/Google Pixel 3 Screenshot 2.png" width="200"/>
+  <img src="assets/Google Pixel 3 Screenshot 2.png" width="180"/>
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="assets/Google Pixel 3 Screenshot 1.png" width="200"/>
+  <img src="assets/Google Pixel 3 Screenshot 1.png" width="180"/>
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="assets/Google Pixel 3 Screenshot 4.png" width="200"/>
+  <img src="assets/Google Pixel 3 Screenshot 4.png" width="180"/>
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="assets/Google Pixel Raw Screenshot 1.png" width="180"/>
+  <img src="assets/Google Pixel Raw Screenshot 1.png" width="160"/>
 </p>
 
 ## ⚡️ Quick Start App
