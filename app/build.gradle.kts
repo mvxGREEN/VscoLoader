@@ -5,15 +5,15 @@ plugins {
 android {
     namespace = "com.xxxgreen.mvx.downloader4vsco"
     compileSdk {
-        version = release(36)
+        version = release(37)
     }
 
     defaultConfig {
         applicationId = "com.xxxgreen.mvx.downloader4vsco"
         minSdk = 24
-        targetSdk = 36
-        versionCode = 102
-        versionName = "4.3.2"
+        targetSdk = 37
+        versionCode = 103
+        versionName = "4.4.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -42,7 +42,6 @@ dependencies {
     implementation(libs.material)
     implementation(libs.androidx.constraintlayout)
 
-    // HTML Parsing (Replaces AngleSharp)
     implementation(libs.jsoup)
 
     implementation(libs.okhttp)
