@@ -138,9 +138,6 @@ class MainActivity : AppCompatActivity() {
             } else {
                 Toast.makeText(this, "Notifications are recommended for background downloads", Toast.LENGTH_SHORT).show()
             }
-
-            // --- CHAIN REACTION: NOW REQUEST BATTERY ---
-            //requestBatteryOptimization()
         }
 
         requestWritePermissionLauncher = registerForActivityResult(
@@ -158,16 +155,14 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-       setupListeners()
+        setupListeners()
         VscoLoader.prepareFileDirs()
 
         // check permissions
         startBackgroundPermissionChain()
 
-        // Setup Toolbar
+        // Setup UI
         setupToolbarMenu()
-
-        // Setup Webview
         setupWebView()
 
         // Finish Receiver
@@ -481,9 +476,6 @@ class MainActivity : AppCompatActivity() {
 
         lastLoadedMediaId = mediaId
 
-        // Proceed as normal
-        //updateUI(UIState.LOADING)
-
         loadMediaData(resolvedUrl)
     }
 
@@ -519,7 +511,6 @@ class MainActivity : AppCompatActivity() {
 
                     if (url.contains("/media/") || url.contains("/video/")) {
                         Log.d("MainActivity", "Shortlink resolved to Media: $url")
-
                         onShortlinkResolved(url)
                     }
                 }
