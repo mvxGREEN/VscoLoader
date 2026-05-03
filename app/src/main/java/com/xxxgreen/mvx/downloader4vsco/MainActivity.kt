@@ -34,7 +34,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var requestNotificationLauncher: androidx.activity.result.ActivityResultLauncher<String>
     private lateinit var requestWritePermissionLauncher: androidx.activity.result.ActivityResultLauncher<String>
 
-    // Logic Variables
     private val VALID_INPUT_REGEX = Pattern.compile("^$|((?:vsco\\.)|(?:vs\\.)?co\\/)", Pattern.CASE_INSENSITIVE)
     private var currentState: UIState = UIState.EMPTY
 
@@ -521,9 +520,6 @@ class MainActivity : AppCompatActivity() {
                     if (url.contains("/media/") || url.contains("/video/")) {
                         Log.d("MainActivity", "Shortlink resolved to Media: $url")
 
-                        // --- CHANGED THIS LINE ---
-                        // Old: loadMediaData(url)
-                        // New: Calls your smart function with the duplicate check
                         onShortlinkResolved(url)
                     }
                 }
@@ -548,19 +544,6 @@ class MainActivity : AppCompatActivity() {
 
                                     // Subtitle = Item Count
                                     binding.tvSubtitle.text = "$count Items"
-
-                                    /*
-                                    // SHOW UI (Without Button)
-                                    if (binding.previewCard.visibility != View.VISIBLE) {
-                                        binding.previewCard.fadeIn()
-                                        binding.bottomControlCard.fadeIn()
-
-                                        // CRITICAL FIX: Explicitly hide the button while loading
-                                        binding.btnAction.visibility = View.INVISIBLE
-
-                                        binding.layoutLoading.fadeOut()
-                                    }
-                                    */
 
                                     if (count > 0 && isValidContextForGlide(this@MainActivity)) {
                                         Glide.with(this@MainActivity)
@@ -617,8 +600,6 @@ class MainActivity : AppCompatActivity() {
         // Cancel any previous jobs (important for rapid pasting)
         fetchJob?.cancel()
 
-        //updateUI(UIState.LOADING)
-
         fetchJob = CoroutineScope(Dispatchers.IO).launch {
             try {
                 val doc = Jsoup.connect(url)
@@ -665,16 +646,6 @@ class MainActivity : AppCompatActivity() {
                                     .into(binding.ivPreview)
                             }
 
-                            // --- FIX START ---
-                            // Prevent the "Double Update" bug.
-                            // If we are auto-downloading, skip PREVIEW and go straight to DOWNLOADING.
-                            //if (VscoLoader.isShared) {
-                            //    startDownloadService() // This triggers updateUI(DOWNLOADING)
-                            //} else {
-                            //    updateUI(UIState.PREVIEW) // This triggers updateUI(PREVIEW)
-                            //}
-                            // --- FIX END ---
-                            // TODO clean up
                             updateUI(UIState.PREVIEW)
 
                         } else {
@@ -768,10 +739,6 @@ class MainActivity : AppCompatActivity() {
                 binding.btnAction.isEnabled = false
                 binding.btnAction.visibility = View.VISIBLE
                 binding.btnShare.visibility = View.VISIBLE
-
-                // You can remove the old "download_finished" call if you want
-                // to strictly use "vl_ui_finish" now.
-                //incrementSuccessfulRuns()
             }
         }
 
@@ -850,11 +817,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun logErrorEvent(eventName: String, error: Exception) {
-        val bundle = Bundle().apply {
-            putString("error_message", error.message ?: "Unknown error")
-            putString("error_class", error.javaClass.simpleName)
-        }
-        //firebaseAnalytics.logEvent(eventName, bundle)
+        // (optional) call analytics here
         Log.e("Analytics", "Logged Error: $eventName", error)
     }
 
