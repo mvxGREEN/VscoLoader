@@ -41,7 +41,6 @@ dependencies {
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
     implementation(libs.androidx.constraintlayout)
-
     implementation(libs.jsoup)
     implementation(libs.okhttp)
     implementation(libs.glide)
