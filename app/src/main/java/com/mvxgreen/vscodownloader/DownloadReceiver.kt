@@ -1,9 +1,10 @@
-package com.xxxgreen.mvx.downloader4vsco
+package com.mvxgreen.vscodownloader
 
 import android.app.DownloadManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -188,7 +189,7 @@ class DownloadReceiver : BroadcastReceiver() {
     private fun scanMediaFile(context: Context, path: String) {
         try {
             val file = File(path)
-            val uri = android.net.Uri.fromFile(file)
+            val uri = Uri.fromFile(file)
             val scanIntent = Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, uri)
             context.sendBroadcast(scanIntent)
         } catch (e: Exception) {

@@ -3,13 +3,13 @@ plugins {
 }
 
 android {
-    namespace = "com.xxxgreen.mvx.downloader4vsco"
+    namespace = "com.mvxgreen.vscodownloader"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.xxxgreen.mvx.downloader4vsco"
+        applicationId = "com.mvxgreen.vscodownloader"
         minSdk = 24
         targetSdk = 37
         versionCode = 103

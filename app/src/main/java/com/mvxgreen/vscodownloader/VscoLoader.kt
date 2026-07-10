@@ -1,4 +1,4 @@
-package com.xxxgreen.mvx.downloader4vsco
+package com.mvxgreen.vscodownloader
 
 import android.app.DownloadManager
 import android.content.Context

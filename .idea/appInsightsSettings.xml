@@ -22,7 +22,7 @@
             <InsightsFilterSettings>
               <option name="connection">
                 <ConnectionSetting>
-                  <option name="appId" value="com.xxxgreen.mvx.downloader4vsco" />
+                  <option name="appId" value="com.mvxgreen.downloader4soundcloud" />
                 </ConnectionSetting>
               </option>
               <option name="signal" value="SIGNAL_UNSPECIFIED" />

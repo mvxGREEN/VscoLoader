@@ -1,5 +1,6 @@
-package com.xxxgreen.mvx.downloader4vsco
+package com.mvxgreen.vscodownloader
 
+import android.R
 import android.app.*
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -68,7 +69,7 @@ class DownloadService : Service() {
     }
 
     private fun updateNotification(progress: Int, max: Int) {
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.notify(NOTIF_ID, buildNotification(progress, max))
     }
 
@@ -80,7 +81,7 @@ class DownloadService : Service() {
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(title)
-            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setSmallIcon(R.drawable.stat_sys_download)
             // Determinate Progress Bar
             .setProgress(max, progress, false)
             .setContentIntent(pendingIntent)

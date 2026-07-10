@@ -1,4 +1,4 @@
-package com.xxxgreen.mvx.downloader4vsco
+package com.mvxgreen.vscodownloader
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -10,18 +10,24 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
+import android.provider.Settings
 import android.text.Editable
 import android.text.TextWatcher
 import android.util.Log
 import android.view.View
+import android.view.inputmethod.InputMethodManager
 import android.webkit.*
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import com.bumptech.glide.Glide
-import com.xxxgreen.mvx.downloader4vsco.databinding.ActivityMainBinding
+import com.mvxgreen.vscodownloader.databinding.ActivityMainBinding
 import kotlinx.coroutines.*
 import org.jsoup.Jsoup
 import java.io.File
@@ -31,8 +37,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private var fetchJob: Job? = null
 
-    private lateinit var requestNotificationLauncher: androidx.activity.result.ActivityResultLauncher<String>
-    private lateinit var requestWritePermissionLauncher: androidx.activity.result.ActivityResultLauncher<String>
+    private lateinit var requestNotificationLauncher: ActivityResultLauncher<String>
+    private lateinit var requestWritePermissionLauncher: ActivityResultLauncher<String>
 
     private val VALID_INPUT_REGEX = Pattern.compile("^$|((?:vsco\\.)|(?:vs\\.)?co\\/)", Pattern.CASE_INSENSITIVE)
     private var currentState: UIState = UIState.EMPTY
@@ -130,7 +136,7 @@ class MainActivity : AppCompatActivity() {
 
         // --- 1. INITIALIZE PERMISSION LAUNCHER ---
         requestNotificationLauncher = registerForActivityResult(
-            androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+            ActivityResultContracts.RequestPermission()
         ) { isGranted: Boolean ->
             // This block runs immediately after the user clicks Allow/Deny
             if (isGranted) {
@@ -141,7 +147,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         requestWritePermissionLauncher = registerForActivityResult(
-            androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+            ActivityResultContracts.RequestPermission()
         ) { isGranted: Boolean ->
             if (isGranted) {
                 // Permission granted, retry the download
@@ -198,7 +204,7 @@ class MainActivity : AppCompatActivity() {
 
         // Paste button
         binding.btnPaste.setOnClickListener {
-            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
             val clip = clipboard.primaryClip
             if (clip != null && clip.itemCount > 0) {
                 val text = clip.getItemAt(0).text.toString()
@@ -281,10 +287,10 @@ class MainActivity : AppCompatActivity() {
     private fun requestBatteryOptimization() {
         // STEP 2: Check Battery Optimization (Android 6+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val powerManager = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+            val powerManager = getSystemService(POWER_SERVICE) as PowerManager
             if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
                 try {
-                    val intent = Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
                     intent.data = Uri.parse("package:$packageName")
                     startActivity(intent)
                 } catch (e: Exception) {
@@ -305,7 +311,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // 2. Check Battery Optimization (Android 6+)
-        val powerManager = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+        val powerManager = getSystemService(POWER_SERVICE) as PowerManager
         val batteryIgnored = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             powerManager.isIgnoringBatteryOptimizations(packageName)
         } else {
@@ -328,11 +334,11 @@ class MainActivity : AppCompatActivity() {
 
         // Priority 2: Battery Optimizations (Intent)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val powerManager = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+            val powerManager = getSystemService(POWER_SERVICE) as PowerManager
             if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
                 try {
                     @SuppressLint("BatteryLife") // Suppress warning, we have a valid use case
-                    val intent = Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
                     intent.data = Uri.parse("package:$packageName")
                     startActivity(intent)
                 } catch (e: Exception) {
@@ -386,14 +392,14 @@ class MainActivity : AppCompatActivity() {
         binding.webView.clearHistory()
 
         // Clear System Web Storage (Cookies & DOM)
-        android.webkit.CookieManager.getInstance().removeAllCookies(null)
-        android.webkit.WebStorage.getInstance().deleteAllData()
+        CookieManager.getInstance().removeAllCookies(null)
+        WebStorage.getInstance().deleteAllData()
 
         VscoLoader.resetVars()
 
         // 2. HIDE KEYBOARD
         val imm =
-            getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+            getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
         imm.hideSoftInputFromWindow(binding.etMainInput.windowToken, 0)
         binding.etMainInput.clearFocus()
 
@@ -426,7 +432,7 @@ class MainActivity : AppCompatActivity() {
             else if (input.contains("vsco.co")) url += input.substring(input.indexOf("vsco.co"))
             else url = input
 
-            val prefs = getSharedPreferences("com.xxxgreen.mvx.prefs", Context.MODE_PRIVATE)
+            val prefs = getSharedPreferences("com.xxxgreen.mvx.prefs", MODE_PRIVATE)
             val isGold = prefs.getBoolean("IS_GOLD", false)
 
             // Collection
@@ -770,7 +776,7 @@ class MainActivity : AppCompatActivity() {
         if (file != null && file.exists()) {
             try {
                 // Generate a secure content:// URI using FileProvider
-                val uri = androidx.core.content.FileProvider.getUriForFile(
+                val uri = FileProvider.getUriForFile(
                     this,
                     "${applicationContext.packageName}.provider",
                     file
